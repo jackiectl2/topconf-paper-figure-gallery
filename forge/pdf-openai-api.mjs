@@ -77,7 +77,7 @@ export async function requestOpenAIPdf(base, body, key, {
       current = structuredClone(initial);
       current.max_output_tokens = Math.min(100000, outputLimit);
       current.input.push({role: 'user', content: [{type: 'input_text', text:
-        '上次输出未完整通过 JSON 验证。请简洁地输出完整 JSON 对象，必须包含 selectedSections 数组，每项含 summary 字符串。不要输出 Markdown 或解释。'}]});
+        'The previous output failed JSON or English-language validation. Return a complete, concise JSON object with selectedSections and nonempty summary fields. Translate Chinese source text into faithful English in every generated field. Do not include Markdown or commentary.'}]});
     }
   }
 }

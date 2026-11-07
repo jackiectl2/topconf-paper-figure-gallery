@@ -34,6 +34,9 @@ export function pdfResponseJSON(data){
     const result=JSON.parse(clean.slice(first,last+1));
     if(!Array.isArray(result.selectedSections)||!result.selectedSections.some(x=>typeof x?.summary==='string'&&x.summary.trim()))
       throw new Error('JSON 缺少相关章节摘要 selectedSections');
+    const generated=[result.title,result.abstract,result.figurePrompt,...result.selectedSections.flatMap(section=>[section?.section,section?.summary,section?.evidence])];
+    if(generated.some(value=>typeof value==='string'&&/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(value)))
+      throw new Error('generated paper summary contains non-English text');
     return result;
   }catch(e){
     throw Object.assign(new Error(`PDF 解析：${e.message}；finish_reason=${finish||'unknown'}，正文 ${text.length} 字符`),
@@ -45,6 +48,10 @@ export function pdfRepairBody(body){
   const next=structuredClone(body);
   const field='max_completion_tokens' in next?'max_completion_tokens':'max_tokens';
   next[field]=Math.min(24000,Math.max(12000,(next[field]||5000)*2));
-  next.messages=[...next.messages,{role:'user',content:'上次输出未通过 JSON 验证。请简洁地输出完整 JSON 对象，必须包含 selectedSections 数组，每项含 summary 字符串。不要输出推理过程、Markdown 或解释。'}];
+  const instruction='The previous response did not pass JSON or English-language validation. Return a complete, concise JSON object with selectedSections and nonempty summary fields. Write every generated string in English, translating any Chinese source text faithfully. Do not include reasoning, Markdown, or commentary.';
+  next.messages=[...next.messages];
+  const last=next.messages.at(-1);
+  if(last?.role==='user'&&Array.isArray(last.content)) last.content.push({type:'text',text:instruction});
+  else next.messages.push({role:'user',content:instruction});
   return next;
 }

@@ -44,6 +44,15 @@ test('empty, truncated, malformed or wrong-schema PDF results cannot be accepted
     {choices:[{message:{content:'{"nodes":[]}'}}]},
   ]) assert.throws(()=>pdfResponseJSON(data),e=>e.pdfFormatFailure===true);
 });
+test('non-English generated paper fields trigger an English-only repair',()=>{
+  const summary={title:'中文标题',selectedSections:[{section:'Method',summary:'Encoder and decoder.'}]};
+  assert.throws(()=>pdfResponseJSON({choices:[{message:{content:JSON.stringify(summary)}}]}),e=>e.pdfFormatFailure===true);
+  const body={model:'test',max_tokens:5000,messages:[{role:'user',content:[{type:'text',text:'Chinese source: 中文'}]}]};
+  const repaired=pdfRepairBody(body);
+  assert.match(repaired.messages.at(-1).content.at(-1).text,/every generated string in English/i);
+  assert.equal(repaired.messages.length,1);
+  assert.equal(body.messages[0].content.length,1);
+});
 test('format recovery increases reasoning-inclusive budget without modifying paper or input body',()=>{
   const body={model:'deepseek-v4.1-flash',max_tokens:5000,reasoning_effort:'high',
     messages:[{role:'user',content:'Original paper'}]};

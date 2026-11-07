@@ -23,6 +23,7 @@ test('SVG then bitmap keeps selected references and passes fresh two-stage analy
     cfg:()=>({proto:'openai'}),cleanKey:s=>s,baseURL:()=> 'https://example.invalid',
     relayBase:()=>'',kindOf:()=> 'image',usesInfistarGemini:()=>true,imageRequestDimensions:()=>{},
     selectImageRoute:()=>{},tt:s=>s,setStep:()=>{},showErr:msg=>assert.fail(msg),
+    drawPrivateReferences:()=>{},renderReferenceUse:()=>{},
     analyzeReferences:async()=>{analyses++;return analysis;},
     genOaiSVG:async(...args)=>calls.push(['svg',...args]),
     genOaiImage:async(...args)=>calls.push(['image',...args])};

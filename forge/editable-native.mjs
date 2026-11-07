@@ -258,8 +258,8 @@ function shapeXml(n,id,unit,media){
     // Scene text coordinates are the top-left of its measured bounding box.
     const ptSize=Math.max(100,Math.round(font*unit/EMU*72*100));
     const color=rgb(n.fill)||'000000';
-    const family=String(n.fontFamily||'Arial').split(',')[0].replace(/["']/g,'').trim();
-    const face=esc(({'serif':'Times New Roman','sans-serif':'Arial'})[family.toLowerCase()]||family||'Arial');
+    const family=String(n.fontFamily||'Comic Sans MS').split(',')[0].replace(/["']/g,'').trim();
+    const face=esc(({'serif':'Times New Roman','sans-serif':'Arial'})[family.toLowerCase()]||family||'Comic Sans MS');
     const textLines=fitted.text.split('\n');
     const leading=textLines.length>1?`<a:lnSpc><a:spcPts val="${Math.round(ptSize*1.14)}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft>`:'';
     const paragraphs=textLines.map(line=>`<a:p><a:pPr algn="${n.anchor==='middle'?'ctr':n.anchor==='end'?'r':'l'}">${leading}</a:pPr><a:r><a:rPr lang="en-US" sz="${ptSize}" b="${n.bold?1:0}" i="${n.italic?1:0}"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${face}"/></a:rPr><a:t>${esc(line)}</a:t></a:r><a:endParaRPr lang="en-US"/></a:p>`).join('');

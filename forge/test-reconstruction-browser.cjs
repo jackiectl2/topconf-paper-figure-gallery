@@ -269,8 +269,8 @@ const server = http.createServer((req,res)=>{
     assert.equal(textCheck.nodes[3].fontSize,22,'three lines retain recognized size');
     assert.equal(textCheck.unchanged,true,'single-line calibrator must leave multiline labels and geometry alone');
 
-    // Step 3 must offer a real bitmap download while Step 4's vision request
-    // is still pending. Exercise the image generation path without a live API.
+    // Step 3 offers a real bitmap download and waits for explicit entry to Step 4.
+    // Exercise the image generation path without a live API.
     const pending=await page.evaluate(async()=>{
       document.querySelector('#figureRatio').value='1:1';
       document.querySelector('#imageResolution').value='1K';
@@ -284,22 +284,27 @@ const server = http.createServer((req,res)=>{
       ctx.fillStyle='#123456';ctx.fillRect(80,80,400,200);
       const b64=canvas.toDataURL('image/png').split(',')[1];
       const original=window.fetch;
+      window.__testUnexpectedReconCalls=0;
       window.fetch=async(url,options)=>{
         if(String(url).endsWith('/images/generations'))
           return new Response(JSON.stringify({data:[{b64_json:b64}]}),{status:200});
         if(String(url).endsWith('/chat/completions')){
+          window.__testUnexpectedReconCalls++;
           await new Promise(resolve=>setTimeout(resolve,3000));
           return new Response(JSON.stringify({choices:[{message:{content:'{}'}}]}),{status:200});
         }
         return original(url,options);
       };
       await window.__ffTestGenerateBitmap('https://browser-test.invalid','gpt-image-2','key','paper','oai',[],'');
-      return {pending:window.__ffExportState.reconPending,
+      return {pending:window.__ffExportState.reconPending,reviewPending:window.__ffExportState.reviewPending,
+        reconCalls:window.__testUnexpectedReconCalls,
         downloadEnabled:!document.querySelector('#dlImg').disabled,
         imageVisible:!!document.querySelector('#out img[data-step3-output]'),
         exportMode:!!document.querySelector('#exportMode')};
     });
-    assert.equal(pending.pending,true,JSON.stringify(pending));
+    assert.equal(pending.pending,false,JSON.stringify(pending));
+    assert.equal(pending.reviewPending,true);
+    assert.equal(pending.reconCalls,0);
     assert.equal(pending.downloadEnabled,true);
     assert.equal(pending.imageVisible,true);
     assert.equal(pending.exportMode,true);
@@ -308,6 +313,9 @@ const server = http.createServer((req,res)=>{
     const bitmap=await bitmapDownload;
     assert.equal(bitmap.suggestedFilename(),'figure-forge-draft.png');
     assert.ok(fs.statSync(await bitmap.path()).size>100);
+    await page.locator('#continueToStep4').click();
+    assert.equal(await page.locator('#reconBtn').isEnabled(),true);
+    assert.equal(await page.evaluate(()=>window.__testUnexpectedReconCalls),0);
     await page.reload({waitUntil:'domcontentloaded'});
 
     const wholeContract=await page.evaluate(async()=>{

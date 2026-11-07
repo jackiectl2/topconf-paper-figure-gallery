@@ -6,7 +6,7 @@ export function layoutEditableText(value, options={}){
   const lines=text.split('\n');
   if(!context&&globalThis.document){try{context=document.createElement('canvas').getContext('2d');}catch{}}
   const measure=options.measureText||(context?.measureText?line=>context.measureText(line):null);
-  if(context)context.font=`${options.italic?'italic ':''}${options.bold?'bold ':''}${originalSize}px ${options.fontFamily||'Arial'}`;
+  if(context)context.font=`${options.italic?'italic ':''}${options.bold?'bold ':''}${originalSize}px ${options.fontFamily||'Comic Sans MS'}`;
   const metrics=measure?lines.map(line=>measure(line)):null;
   const lineWidths=metrics?metrics.map(metric=>typeof metric==='number'?metric:metric.width):null;
   const width=lineWidths?Math.max(0,...lineWidths):null;

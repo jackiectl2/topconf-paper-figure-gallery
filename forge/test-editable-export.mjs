@@ -26,7 +26,7 @@ const code = [
 const context = vm.createContext({
   geometrySegments, expandEditableTextPaths, TextEncoder, Uint8Array, Uint32Array, DataView, Blob, Date,
   Math, Number, String, Array, Object, RegExp, atob, btoa,
-  EXPORT_CANVAS: { w: 1200, h: 675 }, PT_PER_UNIT: 0.6,
+  EXPORT_CANVAS: { w: 1200, h: 675 }, PT_PER_UNIT: 0.6, FIGURE_FONT:'Comic Sans MS',
 });
 vm.runInContext(code, context);
 const { sceneToDrawio, sceneToVsdxFiles, zipStore } = context.exports;
@@ -65,6 +65,8 @@ assert.match(pptxBytes.toString('utf8'),/<a:cubicBezTo>/,
   'cubic and SVG arc paths must export as editable PowerPoint curves');
 assert.match(pptxBytes.toString('utf8'),/rot="2040000"/,
   'rotated text must retain its angle in the PPTX');
+assert.match(pptxBytes.toString('utf8'),/<a:latin typeface="Comic Sans MS"\/>/,
+  'PPTX text without an explicit family defaults to Comic Sans MS');
 assert.equal(parseEditablePath('M 750 330 A 65 65 0 0 1 880 330')[0].commands.some(c=>c.type==='cubic'),true);
 assert.equal(expandEditableTextPaths(scene).nodes.filter(n=>String(n.id||'').startsWith('text_char')).length,5,
   'arc labels must remain editable individual characters');
@@ -77,11 +79,15 @@ assert.equal((pathList.match(/<a:path /g)||[]).length,2,'closed compound contour
 assert.equal((pathList.match(/<a:close\/>/g)||[]).length,2,'both hole and outline are preserved');
 assert.match(pathList,/fill="none"/,'open contour remains unfilled');
 const vsdx = zipStore(sceneToVsdxFiles(scene, 'Arial'));
+const comicVsdxPage=sceneToVsdxFiles(scene,'Comic Sans MS').find(part=>part.name==='visio/pages/page1.xml');
+assert.match(comicVsdxPage.data,/<Cell N="Font" V="Comic Sans MS"\/>/,
+  'Visio writes the selected figure font into editable text');
 const drawio = sceneToDrawio(scene);
 assert.ok(pptx.size > 10000, 'PPTX package should contain native parts');
 assert.ok(vsdx.size > 10000, 'VSDX package should contain native parts');
 assert.equal((drawio.match(/<mxCell id="ff\d+"/g) || []).length, expandEditableTextPaths(scene).nodes.length);
 assert.match(drawio,/rotation=34/,'draw.io rotated text must keep its angle');
+assert.match(drawio,/fontFamily=Comic Sans MS;/,'draw.io writes the figure font explicitly');
 const vsdxBytes=Buffer.from(await vsdx.arrayBuffer());
 const bitmapDashedScene={canvas:scene.canvas,nodes:[
   {type:'line',x:10,y:10,x2:100,y2:10,stroke:'#222222',strokeWidth:2,dash:true},

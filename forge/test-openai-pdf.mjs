@@ -76,6 +76,23 @@ test('malformed final JSON receives one bounded recovery',async()=>{
   assert.equal(count,2);
 });
 
+test('non-English paper summary receives one English-language recovery',async()=>{
+  const requests=[];
+  const result=await requestOpenAIPdf(base,bodyFor([{type:'input_text',text:'Chinese paper source: 中文'}]),'key',{
+    fetchImpl:async(_url,options)=>{
+      requests.push(JSON.parse(options.body));
+      const value=requests.length===1
+        ? {selectedSections:[{section:'方法',summary:'中文摘要'}]}
+        : summary;
+      return new Response(JSON.stringify({status:'completed',output_text:JSON.stringify(value)}));
+    }
+  });
+  assert.deepEqual(result,summary);
+  assert.equal(requests.length,2);
+  assert.match(requests[1].input.at(-1).content[0].text,/Translate Chinese source text into faithful English/);
+  assert.deepEqual(requests[1].input[0],requests[0].input[0]);
+});
+
 test('quota, key and model permissions fail once with useful errors',async()=>{
   for(const [status,code,message] of [[429,'insufficient_quota',/额度不足/],
     [401,'invalid_api_key',/API Key/],[403,'permission_denied',/权限/],[404,'model_not_found',/模型/]]) {

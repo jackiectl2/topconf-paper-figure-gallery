@@ -41,7 +41,7 @@ export function imageRequestDiagnostics(url,payload){
 // One shared deadline includes response bodies and recovery. Never retry an
 // ambiguous network failure: the upstream may already have billed that request.
 export async function requestImageWithRecovery({url,body,key,usedReferences=false,
-  allowReferenceFallback=false,timeoutMs=Infinity,fetchImpl=fetch,
+  allowReferenceFallback=false,timeoutMs=Infinity,fetchImpl=fetch,auth='bearer',model='',
   sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)),onRecovery=()=>{}}){
   const controller=new AbortController();
   const timeout=Object.assign(new Error('Image generation deadline exceeded'),{name:'TimeoutError'});
@@ -55,7 +55,8 @@ export async function requestImageWithRecovery({url,body,key,usedReferences=fals
       const result=await Promise.race([deadline,(async()=>{
         const multipart=payload instanceof FormData;
         const response=await fetchImpl(url,{method:'POST',
-          headers:{...(multipart?{}:{'Content-Type':'application/json'}),Authorization:'Bearer '+key},
+          headers:{...(multipart?{}:{'Content-Type':'application/json'}),
+            ...(auth==='gemini'?{'x-gemini-api-key':key,'x-gemini-model':model}:{Authorization:'Bearer '+key})},
           body:multipart?payload:JSON.stringify(payload),signal:controller.signal});
         return {ok:response.ok,status:response.status,text:await response.text(),
           requestId:response.headers.get('x-request-id')||response.headers.get('request-id')||''};

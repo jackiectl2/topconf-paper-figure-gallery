@@ -1987,7 +1987,7 @@ function recordImageRoute(route,state){
 
 /* ---------------- pass 1: analyze references ---------------- */
 const FIGURE_FONT = 'Comic Sans MS';
-const ANALYZE_SYS = 'You are an expert scientific-figure design analyst. You receive several top-conference figures of the SAME target visual type. Infer the shared visual grammar across all supplied figures: recurring panel divisions, density, element counts, borders, arrows, palette, typography and hierarchy. Do not treat any single figure as a layout master and do not copy a particular figure. Return STRICT JSON only.';
+const ANALYZE_SYS = 'You are an expert scientific-figure design analyst. You receive several top-conference figures of the SAME target visual type. Infer the shared visual grammar across all supplied figures: recurring panel divisions, density, element counts, borders, arrows, palette, typography and hierarchy. Do not treat any single figure as a layout master and do not copy a particular figure. Return STRICT JSON only, with every generated string in English.';
 const RECON_SYS = 'You are a meticulous scientific-figure vectorization service. Reconstruct the supplied figure as a complete editable scene, preserving every visible primitive and its geometry. Return STRICT JSON only, never markdown or commentary. Never replace the scene with one full-canvas bitmap; split panels, borders, arrows, text, icons, charts and image regions into separate nodes.';
 function buildAnalyzePrompt(n, idList){
   const ids = (idList||[]).join(', ');
@@ -2010,7 +2010,7 @@ Analyze the COMMON VISUAL GRAMMAR across all supplied images and return one JSON
  "representative":["ids of the 2-4 figures that best represent the shared composition and richest detail; select them by commonality, not upload order"],
  "imageRefIds":["ids of 1-3 figures that are the strongest visual anchors for a bitmap model"],
  "refinedPrompt":"a detailed self-contained English description of what is drawn: each panel and its contents, the module blocks and their connections, arrow directions and flow, the visual levels, and the icon or illustration style"}
-Rules: output JSON only, no markdown or commentary.
+Rules: output JSON only, no markdown or commentary. Write every generated string in English; translate any text visible in the reference figures rather than copying non-English labels.
 Infer the shared grammar from all figures; do not average them into a bland layout, but do not copy any one composition. The output must be a fresh paper-specific composition that mirrors the recurring density and element vocabulary.
 panels: 3-5 entries whenever the references support that density. x/y/w/h are integers in a 1600x900 coordinate space with the origin at the top-left; they must not overlap and must stay inside 1600x900. Preserve recurring relative arrangements and reading directions while allowing a new composition.
 layoutBlueprint: derive 6-16 concrete zones, grouping frames or module slots from the recurring patterns across the figures. Coordinates are integers in the same 1600x900 space. Preserve common nesting and connector routes, while allowing new content and arrangement. Every zone should contain a meaningful image, formula, chart, matrix, icon or other visual module; avoid conspicuous empty boxes. moduleCount is the number of distinct visual modules in that zone; occupancy is the approximate percent of its area occupied by meaningful content; moduleKinds names the visible kinds (icon, chart, matrix, photo, formula, flow strip, table, diagram fragment, etc.).
@@ -2141,6 +2141,8 @@ async function analyzeReferences(){
     txt=d.choices?.[0]?.message?.content||'';
   }
   const j=extractJSON(txt);
+  if(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(JSON.stringify(j)))
+    throw new Error('Reference analysis returned non-English text. Please generate again.');
   // Representative figures may come back as ids (preferred, unambiguous) or as
   // 1-based indices (older models). Accept either, but only ids that really exist
   // in the analysed set, so a miscount can no longer silently pick the wrong figure.

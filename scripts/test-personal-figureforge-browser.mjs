@@ -91,6 +91,8 @@ try{
   assert.equal(geminiCalls[0].body.contents[0].parts.filter(x=>x.inlineData).length,3);
   assert.match(JSON.stringify(geminiCalls[0].body),/Comic Sans MS/);
   assert.match(JSON.stringify(geminiCalls[0].body),/every visible word in the finished figure must be English/);
+  assert.match(JSON.stringify(geminiCalls[0].body),/Do not add any figure-wide title banner or standalone title row/);
+  assert.match(JSON.stringify(geminiCalls[0].body),/Use a cartoon style/);
   const disclosure=await page.locator('#sentRefsSummary').textContent();
   for(const id of selected) assert.ok(disclosure.includes(id));
   assert.equal(await page.locator('#sentRefsPreview img').count(),3);
@@ -114,6 +116,8 @@ try{
   assert.ok(!openAIImages[0].body.includes('mock-gemini-key'));
   assert.match(openAIImages[0].body,/Comic Sans MS/);
   assert.match(openAIImages[0].body,/every visible word in the finished figure must be English/);
+  assert.match(openAIImages[0].body,/Do not add any figure-wide title banner or standalone title row/);
+  assert.match(openAIImages[0].body,/Use a cartoon style/);
   assert.equal(geminiCalls.length,1);
   await page.locator('#imageProvider').selectOption('gemini');
   await page.locator('#geminiKey').fill('');
@@ -143,6 +147,7 @@ try{
   await page.waitForSelector('#out iframe',{timeout:45000});
   await page.waitForFunction(()=>!document.querySelector('#genBtn').disabled);
   assert.match(await page.locator('#out iframe').getAttribute('srcdoc'),/Comic Sans MS/);
+  assert.match(JSON.stringify(chatBodies.at(-1)),/Never add a figure-wide title banner or standalone title row/);
   assert.equal(await page.evaluate(()=>window.__ffExportState.reviewPending),true);
   assert.equal(await page.locator('#exportConfirm').isDisabled(),true);
   const beforeSvgContinue=chatBodies.length;

@@ -1998,24 +1998,25 @@ Analyze the COMMON VISUAL GRAMMAR across all supplied images and return one JSON
             "variety":"the kinds of visual modules present and how neighbouring modules differ",
  "fill":"one sentence describing how fully the typical boxes are occupied"},
  "strokes":{"box":0,"arrow":0,"connector":0},
- "typography":{"title":0,"panelHeader":0,"label":0,"note":0},
+ "typography":{"panelHeader":0,"label":0,"note":0},
  "palette":{"background":"#hex","primary":"#hex","accent":"#hex","neutral":"#hex","others":["#hex"]},
  "layout":"how the canvas is divided (number/arrangement of panels) and reading direction",
  "panels":[{"name":"panel name","role":"what this panel shows","x":0,"y":0,"w":0,"h":0}],
  "layoutBlueprint":[{"id":"zone-1","role":"what this concrete zone or slot contains","x":0,"y":0,"w":0,"h":0,"moduleCount":0,"occupancy":0,"moduleKinds":["icon","chart"],"nesting":"local nesting","flow":"local reading direction"}],
  "topology":{"anchor":"the recurring composition grammar shared by the figures","zones":"relative columns/rows and nesting that recur","flow":"reading direction and connector routes","spacing":"gaps, margins and whitespace rhythm"},
- "styleFingerprint":{"background":"surface treatment","panelShape":"corner radius and container treatment","moduleShape":"module box treatment","iconStyle":"icon/illustration language","arrowStyle":"arrow and connector language","textTreatment":"title, header and label treatment"},
+ "styleFingerprint":{"background":"surface treatment","panelShape":"corner radius and container treatment","moduleShape":"module box treatment","iconStyle":"icon/illustration language","arrowStyle":"arrow and connector language","textTreatment":"panel header and label treatment"},
  "elements":"recurring visual elements: box styles, arrow types, icon/illustration conventions",
  "hierarchy":"information hierarchy: what is emphasised and how",
  "representative":["ids of the 2-4 figures that best represent the shared composition and richest detail; select them by commonality, not upload order"],
  "imageRefIds":["ids of 1-3 figures that are the strongest visual anchors for a bitmap model"],
  "refinedPrompt":"a detailed self-contained English description of what is drawn: each panel and its contents, the module blocks and their connections, arrow directions and flow, the visual levels, and the icon or illustration style"}
 Rules: output JSON only, no markdown or commentary. Write every generated string in English; translate any text visible in the reference figures rather than copying non-English labels.
+Ignore any overall figure title, title banner, or separate title row in the references. Do not include it in panels, layoutBlueprint, typography, or refinedPrompt; use only the actual diagram panels and their compact headings.
 Infer the shared grammar from all figures; do not average them into a bland layout, but do not copy any one composition. The output must be a fresh paper-specific composition that mirrors the recurring density and element vocabulary.
 panels: 3-5 entries whenever the references support that density. x/y/w/h are integers in a 1600x900 coordinate space with the origin at the top-left; they must not overlap and must stay inside 1600x900. Preserve recurring relative arrangements and reading directions while allowing a new composition.
 layoutBlueprint: derive 6-16 concrete zones, grouping frames or module slots from the recurring patterns across the figures. Coordinates are integers in the same 1600x900 space. Preserve common nesting and connector routes, while allowing new content and arrangement. Every zone should contain a meaningful image, formula, chart, matrix, icon or other visual module; avoid conspicuous empty boxes. moduleCount is the number of distinct visual modules in that zone; occupancy is the approximate percent of its area occupied by meaningful content; moduleKinds names the visible kinds (icon, chart, matrix, photo, formula, flow strip, table, diagram fragment, etc.).
 palette: every value MUST be a real #rrggbb hex string.
-typography: integer pixel sizes for a 1600x900 canvas (title 36-56, panelHeader 26-36, label 20-30, note 16-22).
+typography: integer pixel sizes for a 1600x900 canvas (panelHeader 26-36, label 20-30, note 16-22).
 strokes: integer pixel widths (box 2-4, arrow 2-4, connector 1-3).
 density: COUNT what you actually see, as integers. Use the median only for genuinely shared quantities; keep the strongest recurring topology and density when the figures differ materially — never report 0 for something you can see:
   containers  how many outer panel/container boxes one typical figure has,
@@ -2036,6 +2037,20 @@ representative: use the figure ids EXACTLY as listed below, 2-4 of them, no indi
 imageRefIds: choose 1-3 figures that collectively show the shared panel, palette and element language; do not force the first supplied id and do not select a visually incompatible outlier.
 Available figure ids: ${ids}
 topology, styleFingerprint and refinedPrompt must describe visible layout and styling, not the paper's scientific claims. refinedPrompt should be 120-180 concrete English words about panels, arrows, palette, spacing, hierarchy and illustration language. It is used as a visual guide, not as a request to copy reference labels. Keep the prose compact so the whole JSON answer fits in one response.`;
+}
+function omitGlobalTitle(j){
+  const isTitleZone=z=>{
+    if(!z||typeof z!=='object') return false;
+    const text=[z.name,z.role,z.id].filter(Boolean).join(' ');
+    const y=Number(z.y),w=Number(z.w),h=Number(z.h);
+    return Number.isFinite(y)&&Number.isFinite(w)&&Number.isFinite(h)
+      && y<160&&w>=400&&h<=150
+      && (/\b(?:title|banner)\b/i.test(text)||/\b(?:overall|global|figure|paper)\s+(?:header|heading)\b/i.test(text));
+  };
+  for(const field of ['panels','layoutBlueprint'])
+    if(Array.isArray(j[field])) j[field]=j[field].filter(z=>!isTitleZone(z));
+  if(j.typography&&typeof j.typography==='object') delete j.typography.title;
+  return j;
 }
 function jsonCandidateSlices(txt){
   const s=String(txt||'');
@@ -2140,7 +2155,7 @@ async function analyzeReferences(){
     if(d.choices?.[0]?.finish_reason==='length') throw new Error(tt('err.analyze3'));
     txt=d.choices?.[0]?.message?.content||'';
   }
-  const j=extractJSON(txt);
+  const j=omitGlobalTitle(extractJSON(txt));
   if(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(JSON.stringify(j)))
     throw new Error('Reference analysis returned non-English text. Please generate again.');
   // Representative figures may come back as ids (preferred, unambiguous) or as
@@ -2248,8 +2263,8 @@ function imageStyleText(j){
   }
   const ty = j.typography;
   if(ty && typeof ty === 'object'){
-    const scale = ['title','panelHeader','label','note'].filter(k=>ty[k]!=null).map(k=>`${k} ${ty[k]}px`);
-    if(scale.length) rows.push(`- type scale: ${scale.join(', ')} (keep this hierarchy: the title clearly largest, panel headers next, then labels, then small notes)`);
+    const scale = ['panelHeader','label','note'].filter(k=>ty[k]!=null).map(k=>`${k} ${ty[k]}px`);
+    if(scale.length) rows.push(`- type scale: ${scale.join(', ')} (compact panel headers, then labels and small notes)`);
   }
   const st = j.strokes;
   if(st && typeof st === 'object'){
@@ -2358,7 +2373,7 @@ function designContractText(j, ratio='16:9'){
   }
   const ty = j.typography;
   if(ty && typeof ty === 'object'){
-    const t = ['title','panelHeader','label','note'].filter(k=>ty[k]!=null).map(k=>`${k} ${ty[k]}px`);
+    const t = ['panelHeader','label','note'].filter(k=>ty[k]!=null).map(k=>`${k} ${ty[k]}px`);
     if(t.length) rows.push(`- type scale (px, on a ${canvas.width}x${canvas.height} canvas): ${t.join(', ')}`);
   }
   const st = j.strokes;
@@ -2400,12 +2415,12 @@ ${content}
 ${refLines}
 
 Produce one complete editable SVG with viewBox="0 0 1600 900", a horizontal canvas, and a white background. Treat the shared topology, proportions, module density, palette, line styles, spacing, and reading direction in the design contract as the highest-priority visual guide. Do not copy a reference's exact content or entire composition. Align boxes, arrows, and labels. Make panel borders visibly thicker than internal module borders; use dashed frames for optional, conceptual, or repeated groups. Do not use lorem ipsum or placeholder numbers.
-Do not add a large title row across the top; use only compact panel headings where needed. Use a cartoon style.
+Do not add any figure-wide title banner or standalone title row, even if a reference has one. Begin with the actual diagram panels; use only compact panel headings where needed. Use a cartoon style.
 If the design contract gives panel coordinates or font sizes, use those values directly. Fill each defined module region with meaningful content: flows, network diagrams, tables, small charts, thumbnails, icons, legends, or short labels. Preserve intentional margins and group spacing while avoiding large empty blocks. Reuse repeated styles with <defs> where appropriate, and finish the SVG with </svg>.
 Every visible word in the figure must be English, including titles, panel headings, module names, axes, legends, and annotations. Translate any Chinese source terminology faithfully into concise English. Keep all visible text as editable SVG <text> elements in Comic Sans MS; never turn lettering into paths or images. Preserve paper-specific numbers and terms. Keep every text box inside x=0..1600 and y=0..900, inside its containing module, and free of overlap with other labels.
 Give every visible element a stable unique id plus data-role and data-editable="true". Use basic editable SVG shapes and paths; avoid masks, filters, complex clip paths, and a full-canvas bitmap. Keep backgrounds and decorations behind text. Return only the complete SVG, without Markdown or commentary.`;
 }
-const SVG_SYS = 'You are a world-class scientific figure designer. Based on the user paper content and the attached reference figures, output exactly ONE complete, self-contained SVG. Treat the supplied reference-derived design contract as the highest-priority visual constraint: preserve its shared panel topology, relative proportions, nesting, spacing rhythm, density, palette, stroke language and reading direction. Do not force a fixed number of side-by-side panels or a generic grid. Never add a large title row across the top; use a cartoon style. Produce a richly populated, publication-quality composition: fill most reference-defined module regions with meaningful diagrams, mini charts, thumbnails, icons, legends or short labels, while preserving intentional gutters and avoiding conspicuous empty areas. Translate any Chinese paper terms into concise English labels. Every visible title, panel heading, module name, axis, legend and annotation must be in English; no Chinese characters may appear in the figure. Exact wording is secondary to layout richness because labels will be edited later; use short readable English labels and clean editable text slots rather than paragraphs. Use Comic Sans MS for every visible title, label, axis, legend and annotation; keep all lettering as editable SVG text. Preserve editable export semantics: give every visible element a stable id plus data-role and data-editable="true"; keep labels as SVG <text>, use basic shapes and paths, avoid masks/filters/outlined text, use viewBox="0 0 1600 900", and never flatten the whole figure into one bitmap. Output SVG markup only, no explanations or code fences.';
+const SVG_SYS = 'You are a world-class scientific figure designer. Based on the user paper content and the attached reference figures, output exactly ONE complete, self-contained SVG. Treat the supplied reference-derived design contract as the highest-priority visual constraint: preserve its shared panel topology, relative proportions, nesting, spacing rhythm, density, palette, stroke language and reading direction. Do not force a fixed number of side-by-side panels or a generic grid. Never add a figure-wide title banner or standalone title row, even if a reference has one; start with the diagram panels and use a cartoon style. Produce a richly populated, publication-quality composition: fill most reference-defined module regions with meaningful diagrams, mini charts, thumbnails, icons, legends or short labels, while preserving intentional gutters and avoiding conspicuous empty areas. Translate any Chinese paper terms into concise English labels. Every visible title, panel heading, module name, axis, legend and annotation must be in English; no Chinese characters may appear in the figure. Exact wording is secondary to layout richness because labels will be edited later; use short readable English labels and clean editable text slots rather than paragraphs. Use Comic Sans MS for every visible title, label, axis, legend and annotation; keep all lettering as editable SVG text. Preserve editable export semantics: give every visible element a stable id plus data-role and data-editable="true"; keep labels as SVG <text>, use basic shapes and paths, avoid masks/filters/outlined text, use viewBox="0 0 1600 900", and never flatten the whole figure into one bitmap. Output SVG markup only, no explanations or code fences.';
 
 /* ---------------- HTTP helpers ---------------- */
 function showErr(msg){
@@ -6205,7 +6220,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     + `When the references support it, use 3-5 dense panels with thick outer containers and finer module borders, mixed solid/dashed frames, and a meaningful visual element in every slot. `
     + `Do not copy any one reference's exact composition, subject matter, text, thumbnails, icons or image pixels, and do not create a generic empty grid. `
     + `Publication-quality scientific figure for a top-tier ML paper. `
-    + `Do not add a large title row across the top; use only compact panel headings where needed. `
+    + `Do not add any figure-wide title banner or standalone title row, even if a reference has one. Begin with the actual diagram panels. `
     + `Use the recurring zone count, order, relative widths/heights and module-slot density from the design contract, allowing a new arrangement that combines the shared structure. `
     + `Do not collapse the shared structure into a sparse or symmetric generic grid. Treat the blueprint as a construction plan; every defined slot must receive `
     + `one concrete content module from this paper, with the same nesting and approximate occupied area as the shared blueprint. Each zone carries its `
@@ -6277,7 +6292,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
       ? fitImagePrompt(layoutGuide||'',budget,Math.floor(budget.limit*(hasAnalyzedLayout?.35:.3)))+'\n'
       : '');
   // Keep the selected intent outside style compression, including custom text.
-  const intent=`Figure language requirement: every visible word in the finished figure must be English, including the title, panel headings, module labels, axes, legends and annotations. Translate Chinese paper terms into concise English; do not draw Chinese characters.\nTypography requirement: use Comic Sans MS for every visible title, panel heading, label, axis, legend and annotation. Keep text crisp and readable.\nDo not add a large title row across the top; use only compact panel headings where needed. Use a cartoon style.\n`+generationIntent(content)+'\n';
+  const intent=`Figure language requirement: every visible word in the finished figure must be English, including panel headings, module labels, axes, legends and annotations. Translate Chinese paper terms into concise English; do not draw Chinese characters.\nTypography requirement: use Comic Sans MS for every visible panel heading, label, axis, legend and annotation. Keep text crisp and readable.\nDo not add any figure-wide title banner or standalone title row, even if a reference or the paper title suggests one. Begin with the actual diagram panels; use only compact panel headings where needed. Use a cartoon style.\n`+generationIntent(content)+'\n';
   const paperReserve=Math.min(imagePromptSize(content,budget),Math.floor(budget.limit*(budget.unit==='tokens'?.25:.35)));
   const paperHeader='\nPaper content (figure-critical facts first):\n';
   if(imagePromptSize(intent+paperHeader,budget)+paperReserve>=budget.limit){

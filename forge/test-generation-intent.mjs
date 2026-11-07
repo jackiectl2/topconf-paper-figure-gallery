@@ -42,7 +42,7 @@ for(const target of ['overview','architecture','pipeline','results','custom']){
       assert.match(bitmap,/every visible word in the finished figure must be English/);
       for(const prompt of [svg,bitmap]){
         assert.ok(prompt.includes('Comic Sans MS'));
-        assert.match(prompt,/Do not add a large title row across the top/);
+        assert.match(prompt,/Do not add any figure-wide title banner or standalone title row/);
         assert.match(prompt,/Use a cartoon style/);
         assert.ok(prompt.includes(ctx.targets[target].promptLabel));
         assert.ok(prompt.includes(description));
@@ -54,6 +54,27 @@ for(const target of ['overview','architecture','pipeline','results','custom']){
     });
   }
 }
+
+test('reference analysis drops a top title banner before building generation guides',()=>{
+  const omit=source.slice(source.indexOf('function omitGlobalTitle('),source.indexOf('function jsonCandidateSlices('));
+  const style=source.slice(source.indexOf('function imageStyleText('),source.indexOf('function designContractText('));
+  const contract=source.slice(source.indexOf('function designContractText('),source.indexOf('function generationIntent('));
+  const ctx={figureCanvas:()=>({width:1600,height:900})};
+  runInNewContext(`${omit}\n${style}\n${contract}\nthis.clean=omitGlobalTitle;this.style=imageStyleText;this.contract=designContractText;`,ctx);
+  const analyzed={typography:{title:56,panelHeader:28,label:22,note:18},
+    panels:[{name:'Figure title',role:'overall title banner',x:0,y:20,w:1100,h:70},
+      {name:'Panel A',role:'Method',x:0,y:110,w:780,h:700}],
+    layoutBlueprint:[{id:'title-row',role:'figure title',x:0,y:20,w:1100,h:70},
+      {id:'method',role:'Method modules',x:0,y:110,w:780,h:700}]};
+  const clean=ctx.clean(analyzed);
+  assert.equal(clean.typography.title,undefined);
+  assert.equal(clean.panels.length,1);
+  assert.equal(clean.layoutBlueprint.length,1);
+  const guides=ctx.style(clean).join('\n')+'\n'+ctx.contract(clean);
+  assert.doesNotMatch(guides,/title 56px|title-row|overall title banner|Figure title/);
+  assert.match(guides,/panelHeader 28px/);
+  assert.match(guides,/Method modules/);
+});
 
 test('generation uses the current selection and custom description, independent of PDF parsing',()=>{
   const {ctx,nodes}=harness();

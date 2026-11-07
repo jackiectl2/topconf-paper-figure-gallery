@@ -42,6 +42,8 @@ for(const target of ['overview','architecture','pipeline','results','custom']){
       assert.match(bitmap,/every visible word in the finished figure must be English/);
       for(const prompt of [svg,bitmap]){
         assert.ok(prompt.includes('Comic Sans MS'));
+        assert.match(prompt,/Do not add a large title row across the top/);
+        assert.match(prompt,/Use a cartoon style/);
         assert.ok(prompt.includes(ctx.targets[target].promptLabel));
         assert.ok(prompt.includes(description));
         assert.ok(prompt.includes('input passes through encoder'));

@@ -26,6 +26,6 @@ const {name,version,type,main}=JSON.parse(readFileSync(join(desktopRoot,'package
 writeFileSync(join(stage,'package.json'),JSON.stringify({name,version,type,main}));
 rmSync(out,{recursive:true,force:true});
 mkdirSync(out,{recursive:true});
-const appPaths=await packager({dir:stage,out,name:'FigureForge',platform:'darwin',arch:'arm64',electronVersion:'45.3.0',asar:false,overwrite:true,prune:true,appVersion:version,executableName:'FigureForge'});
+const appPaths=await packager({dir:stage,out,name:'FigureForgeTest',platform:'darwin',arch:'arm64',electronVersion:'45.3.0',asar:false,overwrite:true,prune:true,appVersion:version,executableName:'FigureForgeTest',appBundleId:'com.figureforge.test'});
 if(appPaths.length!==1)throw new Error('Expected one packaged application.');
 process.stdout.write(`${appPaths[0]}\n`);

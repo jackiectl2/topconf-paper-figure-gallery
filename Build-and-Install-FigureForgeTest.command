@@ -9,11 +9,12 @@ fi
 if [[ ! -d desktop/node_modules ]]; then
   npm --prefix desktop ci
 fi
-npm --prefix desktop run cache:install
 npm --prefix desktop run package:mac
-app_source="$project_dir/_local/desktop-build/dist/FigureForge-darwin-arm64/FigureForge.app"
-app_target="/Applications/FigureForge.app"
-app_backup="/Applications/FigureForge.previous.app"
+npm --prefix desktop run cache:install
+app_source="$project_dir/_local/desktop-build/dist/FigureForgeTest-darwin-arm64/FigureForgeTest.app"
+app_target="/Applications/FigureForgeTest.app"
+app_backup="/Applications/FigureForgeTest.previous.app"
+legacy_app="/Applications/FigureForge.app"
 rm -rf "$app_backup"
 if [[ -d "$app_target" ]]; then mv "$app_target" "$app_backup"; fi
 if ! mv "$app_source" "$app_target"; then
@@ -22,5 +23,6 @@ if ! mv "$app_source" "$app_target"; then
   exit 1
 fi
 rm -rf "$app_backup"
+if [[ -d "$legacy_app" ]]; then rm -rf "$legacy_app"; fi
 echo "Installed: $app_target"
-echo "Private references: $HOME/Library/Application Support/FigureForge/paperbananabench"
+echo "Private references: $HOME/Library/Application Support/FigureForgeTest/paperbananabench"

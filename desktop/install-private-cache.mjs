@@ -1,13 +1,17 @@
-import {chmodSync,copyFileSync,existsSync,lstatSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {chmodSync,copyFileSync,existsSync,lstatSync,mkdirSync,readFileSync,renameSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 
 const projectRoot=resolve(fileURLToPath(new URL('..',import.meta.url)));
-const defaultDestination=join(homedir(),'Library','Application Support','FigureForge','paperbananabench');
+const supportRoot=join(homedir(),'Library','Application Support');
+const dataRoot=join(supportRoot,'FigureForgeTest');
+const legacyDataRoot=join(supportRoot,'FigureForge');
+const defaultDestination=join(dataRoot,'paperbananabench');
 const imagePattern=/^images\/(?:ref|test)_\d+\.(?:jpg|jpeg|png|webp)$/;
 
 export function installPrivateCache({sourceRoot=join(projectRoot,'_local','paperbananabench'),destinationRoot=defaultDestination}={}){
+  if(destinationRoot===defaultDestination&&!existsSync(dataRoot)&&existsSync(legacyDataRoot))renameSync(legacyDataRoot,dataRoot);
   const manifestPath=join(sourceRoot,'manifest.json');
   if(!existsSync(manifestPath))throw new Error(`Private reference cache is missing: ${manifestPath}`);
   const source=readFileSync(manifestPath);

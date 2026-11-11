@@ -165,12 +165,10 @@ try{
   assert.equal(await page.locator('#exportConfirm').isEnabled(),true);
   assert.equal(chatBodies.length,beforeSvgContinue,'SVG continuation must not call another model');
   const overlongSvg=await page.evaluate(()=>{
-    try{
-      window.__ffRenderSVG(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><text x="20" y="40">${'A'.repeat(1301)}</text></svg>`,false,[],false);
-      return '';
-    }catch(error){return error.message;}
+    window.__ffRenderSVG(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><text x="20" y="40">${'A'.repeat(1301)}</text></svg>`,false,[],false);
+    return document.querySelector('#out .hint').textContent;
   });
-  assert.match(overlongSvg,/1301.*1300/);
+  assert.match(overlongSvg,/1,301.*target 1,300.*above target/);
   console.log('PASS browser: SVG/bitmap review gate, manual continuation, regeneration without paper reparse, private rotation, dual providers and error handling');
 }finally{
   await browser.close();

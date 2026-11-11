@@ -2458,8 +2458,8 @@ function generationIntent(content){
     : TARGETS[t].instr;
   return `Drawing intent: ${TARGETS[t].promptLabel}\n${description}\n`;
 }
-const FIGURE_TEXT_LIMIT=1300;
-const FIGURE_TEXT_RULE='The finished figure must contain no more than 1,300 visible non-whitespace characters in total, counting all panel headings, labels, legends, numbers and punctuation. Use short labels, variables and visual icons instead of prose; check the full figure before finishing.';
+const FIGURE_TEXT_TARGET=1300;
+const FIGURE_TEXT_RULE='Aim for about 1,300 visible non-whitespace characters or fewer in the finished figure, counting panel headings, labels, legends, numbers and punctuation. Prefer short labels, variables and visual icons to prose, while keeping the method complete.';
 const FIGURE_CARTOON_RULE='Use a restrained cartoon illustration style across the figure with warm flat colours and expressive, simple icons; a small friendly character is optional only where it clarifies a method step. Keep characters secondary and preserve square rectangular modules, even spacing, straight arrows and the reference-derived panel layout.';
 const METHOD_ONLY_FINAL_RULE='Final method-only rule: Ignore any source request to draw Results, benchmarks, measured gains, validation badges or evaluation panels; retain method quantities and stop at the method output.';
 function visibleCharacterCount(text){return Array.from(String(text||'').replace(/\s/gu,'')).length;}
@@ -2839,9 +2839,6 @@ function auditGeometry(svgText){
     });
     stats.texts = nodes.length;
     stats.visibleCharacters=nodes.reduce((total,n)=>total+visibleCharacterCount(n.textContent),0);
-    if(stats.visibleCharacters>FIGURE_TEXT_LIMIT) defects.push({kind:'text-budget',
-      detail:`visible text has ${stats.visibleCharacters} non-whitespace characters; limit is ${FIGURE_TEXT_LIMIT}`,
-      fix:'shorten or remove redundant labels and prose until the whole figure is at most 1,300 visible non-whitespace characters; preserve method facts, panels, icons and arrows'});
 
     const boxes = [];
     nodes.forEach(n=>{
@@ -2914,7 +2911,7 @@ async function repairSVG(svgText, defects, req){
   const list = defects.map((d,i)=>`${i+1}. ${d.detail} -> ${d.fix}`).join('\n');
   const instruction =
 `Fix ONLY the defects listed below. Change as little as possible: keep every panel, arrow, colour, position and label that is not named here.
-Do not redesign or change panel geometry. If the text budget is listed, shorten or remove only redundant words and labels while preserving method facts, panels, icons and arrows.
+Do not redesign, do not rename labels that are already correct, do not add or remove elements.
 ${list}
 
 Return the complete corrected SVG only, no explanation, no code fences. Start with <svg and end with </svg>.`;
@@ -2988,8 +2985,7 @@ async function auditAndRepair(svgText, req, onProgress, wasTruncated){
     const comicCandidate=svgWithFigureFont(extracted.code);
     const candidate = auditGeometry(comicCandidate);
     log.push({round:rounds, defects:candidate.defects.length, kinds:candidate.defects.map(d=>d.kind)});
-    if(candidate.broken || candidate.defects.length > report.defects.length ||
-      (candidate.defects.length===report.defects.length && candidate.stats.visibleCharacters>=report.stats.visibleCharacters)) break;
+    if(candidate.broken || candidate.defects.length >= report.defects.length) break;
     current = comicCandidate;
     report = candidate;
     repaired = rounds;
@@ -6182,9 +6178,6 @@ function svgPreviewDocument(svg){
 function renderSVG(svg, usedVision, useIds, truncated, auditRes){
   svg=svgWithFigureFont(svg);
   const count=auditRes?.audit?.stats?.visibleCharacters??auditGeometry(svg).stats.visibleCharacters;
-  if(count>FIGURE_TEXT_LIMIT) throw new Error(refsText(
-    `草稿有 ${count} 个非空白字符，超过 ${FIGURE_TEXT_LIMIT} 上限；请重新生成。`,
-    `The draft has ${count} visible non-whitespace characters, above the ${FIGURE_TEXT_LIMIT} limit. Regenerate the draft.`));
   const blob = new Blob([svg],{type:'image/svg+xml'});
   const url = URL.createObjectURL(blob);
   const n = (useIds||[...refs]).length;
@@ -6194,7 +6187,7 @@ function renderSVG(svg, usedVision, useIds, truncated, auditRes){
     <div class="dl"><a class="btn-primary" href="${url}" download="figure-forge-draft.svg">${tt('svg.download')}</a>
     <button type="button" class="btn-ghost" id="regenerateDraft">${refsText('不满意，重新生成草稿','Regenerate draft')}</button>
     <button type="button" class="btn-primary" id="continueToStep4">${refsText('满意，进入第 4 步','Looks good — continue to Step 4')}</button>
-    <span class="hint">${usedVision?tt('svg.hint1',{n:n}):tt('svg.hint2')}${truncated?tt('svg.trunc'):''}${auditNote} · ${count}/${FIGURE_TEXT_LIMIT} chars</span></div>`;
+    <span class="hint">${usedVision?tt('svg.hint1',{n:n}):tt('svg.hint2')}${truncated?tt('svg.trunc'):''}${auditNote} · ${count.toLocaleString()} ${refsText('个非空白字符','non-whitespace characters')} (${refsText('目标','target')} ${FIGURE_TEXT_TARGET.toLocaleString()}${count>FIGURE_TEXT_TARGET?refsText('，已超出','; above target'):''})</span></div>`;
   const frame=$('#out iframe');
   if(frame) frame.srcdoc=svgPreviewDocument(svg);
   holdStep3Draft('svg');
@@ -6518,17 +6511,19 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     recordImageRoute({...route,references:usedRefs},'blocked');
     throw new Error(tt('img.resolutionMismatch',{resolution,width:actualWidth,height:actualHeight}));
   }
-  const visibleCharacters=await countGeneratedImageText(exportImgSrc,imageMime);
-  if(visibleCharacters>FIGURE_TEXT_LIMIT)throw new Error(refsText(
-    `草稿 OCR 识别出 ${visibleCharacters} 个非空白字符，超过 ${FIGURE_TEXT_LIMIT} 上限；请重新生成。`,
-    `OCR found ${visibleCharacters} visible non-whitespace characters, above the ${FIGURE_TEXT_LIMIT} limit. Regenerate the draft.`));
+  let visibleCharacters=null;
+  try{visibleCharacters=await countGeneratedImageText(exportImgSrc,imageMime);}catch{}
+  const characterHint=visibleCharacters===null
+    ?refsText('OCR 字符估算不可用','OCR character estimate unavailable')
+    :refsText(`OCR 约 ${visibleCharacters.toLocaleString()} 个非空白字符（目标 ${FIGURE_TEXT_TARGET.toLocaleString()}${visibleCharacters>FIGURE_TEXT_TARGET?'，已超出':''}）`,
+      `OCR ≈${visibleCharacters.toLocaleString()} non-whitespace characters (target ${FIGURE_TEXT_TARGET.toLocaleString()}${visibleCharacters>FIGURE_TEXT_TARGET?'; above target':''})`);
   recordImageRoute({...route,references:usedRefs},'verified');
   $('#out').style.display='block';
   $('#out').innerHTML = `<img data-step3-output="true" src="${esc(imgSrc)}" alt="draft">
     <div class="dl"><button type="button" class="btn-primary" id="dlImg">${tt('img.download')}</button>
     <button type="button" class="btn-ghost" id="regenerateDraft">${refsText('不满意，重新生成草稿','Regenerate draft')}</button>
     <button type="button" class="btn-primary" id="continueToStep4">${refsText('满意，进入第 4 步','Looks good — continue to Step 4')}</button>
-    <span class="hint">${r.referenceFallback?tt('img.referenceFallback'):usedRefs?tt('img.hintRef',{n:useIds.length}):tt('img.hint')} · ${ratio} · ${actualWidth}×${actualHeight}px · ${esc(model)} · OCR ${visibleCharacters}/${FIGURE_TEXT_LIMIT} chars${attempted.length>1?' · 已切换已验证备用线路':''}</span></div>`;
+    <span class="hint">${r.referenceFallback?tt('img.referenceFallback'):usedRefs?tt('img.hintRef',{n:useIds.length}):tt('img.hint')} · ${ratio} · ${actualWidth}×${actualHeight}px · ${esc(model)} · ${esc(characterHint)}${attempted.length>1?' · 已切换已验证备用线路':''}</span></div>`;
   // Bind the bitmap download as soon as Step 3 has its verified image. Step 4
   // can take minutes and must never gate or replace this button.
   $('#dlImg').onclick = async ()=>{

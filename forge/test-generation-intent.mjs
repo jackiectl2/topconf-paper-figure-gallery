@@ -46,7 +46,7 @@ for(const target of ['overview','architecture','pipeline','results','custom']){
         assert.ok(prompt.includes('Comic Sans MS'));
         assert.match(prompt,/Do not add any figure-wide title banner or standalone title row/);
         assert.match(prompt,/restrained cartoon illustration style/);
-        assert.match(prompt,/no more than 1,300 visible non-whitespace characters/);
+        assert.match(prompt,/Aim for about 1,300 visible non-whitespace characters or fewer/);
         assert.match(prompt,/square rectangular modules, even spacing, straight arrows/);
         assert.ok(prompt.includes(ctx.targets[target].promptLabel));
         assert.ok(prompt.includes(description));

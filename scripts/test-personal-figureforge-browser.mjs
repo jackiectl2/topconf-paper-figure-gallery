@@ -7,7 +7,7 @@ let geminiStatus=200;
 let svgDraft=false;
 const geminiCalls=[];
 const geminiCounts=[];
-const server=createPersonalServer({fetchImpl:async(url,init)=>{
+const server=createPersonalServer({ocrImpl:async()=>({characters:20}),fetchImpl:async(url,init)=>{
   if(url.endsWith(':countTokens')){
     geminiCounts.push({url,headers:init.headers,body:JSON.parse(init.body.toString())});
     return new Response(JSON.stringify({totalTokens:2400}),{status:200,headers:{'Content-Type':'application/json'}});
@@ -99,7 +99,7 @@ try{
   assert.match(JSON.stringify(geminiCalls[0].body),/Comic Sans MS/);
   assert.match(JSON.stringify(geminiCalls[0].body),/every visible word in the finished figure must be English/);
   assert.match(JSON.stringify(geminiCalls[0].body),/Do not add any figure-wide title banner or standalone title row/);
-  assert.match(JSON.stringify(geminiCalls[0].body),/Use a cartoon style/);
+  assert.match(JSON.stringify(geminiCalls[0].body),/restrained cartoon illustration style/);
   const disclosure=await page.locator('#sentRefsSummary').textContent();
   for(const id of selected) assert.ok(disclosure.includes(id));
   assert.equal(await page.locator('#sentRefsPreview img').count(),3);
@@ -124,7 +124,7 @@ try{
   assert.match(openAIImages[0].body,/Comic Sans MS/);
   assert.match(openAIImages[0].body,/every visible word in the finished figure must be English/);
   assert.match(openAIImages[0].body,/Do not add any figure-wide title banner or standalone title row/);
-  assert.match(openAIImages[0].body,/Use a cartoon style/);
+  assert.match(openAIImages[0].body,/restrained cartoon illustration style/);
   assert.equal(geminiCalls.length,1);
   await page.locator('#imageProvider').selectOption('gemini');
   await page.locator('#geminiKey').fill('');
@@ -164,6 +164,13 @@ try{
   assert.equal((await page.evaluate(()=>window.__ffExportState.scene.nodes.find(n=>n.type==='text')?.fontFamily)).replaceAll('"',''),'Comic Sans MS');
   assert.equal(await page.locator('#exportConfirm').isEnabled(),true);
   assert.equal(chatBodies.length,beforeSvgContinue,'SVG continuation must not call another model');
+  const overlongSvg=await page.evaluate(()=>{
+    try{
+      window.__ffRenderSVG(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><text x="20" y="40">${'A'.repeat(1301)}</text></svg>`,false,[],false);
+      return '';
+    }catch(error){return error.message;}
+  });
+  assert.match(overlongSvg,/1301.*1300/);
   console.log('PASS browser: SVG/bitmap review gate, manual continuation, regeneration without paper reparse, private rotation, dual providers and error handling');
 }finally{
   await browser.close();

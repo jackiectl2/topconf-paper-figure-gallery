@@ -878,9 +878,9 @@ const TARGETS = {
  overview:{label:tt('tg.overview'),promptLabel:'Figure 1 overview / teaser',img:'Design a publication-quality Figure 1 teaser/overview figure that follows the supplied reference composition',
    instr:'Show the relationship between the input, core method, and output or effects. Follow the reference design contract for module count, panel division, reading direction, and information density.'},
  architecture:{label:tt('tg.architecture'),promptLabel:'Method architecture',img:'Design a publication-quality method architecture figure that follows the supplied reference composition',
-   instr:'Show the model components, hierarchy, data flow, and connections. Follow the reference design contract for component count, nesting, panel division, and reading direction.'},
+   instr:'Show the model components, hierarchy, data flow, and connections. End at the method output, without empirical results, benchmark values, performance claims, or evaluation panels. Method dimensions, hyperparameters, equations, and variables are allowed. Follow the reference design contract for component count, nesting, panel division, and reading direction.'},
  pipeline:{label:tt('tg.pipeline'),promptLabel:'Pipeline / process',img:'Design a publication-quality pipeline/process figure that follows the supplied reference composition',
-   instr:'Show stages from input to output, including branches, loops, or feedback where the paper supports them. Follow the reference design contract for layout, direction, containers, and arrows.'},
+   instr:'Show method stages from input to the method output, including branches, loops, or feedback where the paper supports them. Do not add a Results stage, empirical results, benchmark values, performance claims, or evaluation panels. Method dimensions, hyperparameters, equations, and variables are allowed. Follow the reference design contract for layout, direction, containers, and arrows.'},
  results:{label:tt('tg.results'),promptLabel:'Results',img:'Design a publication-quality results figure that follows the supplied reference composition',
    instr:'Show samples, methods, metrics, and comparisons. Follow the reference design contract for panels, chart types, grouping, legends, and reading direction.'},
  custom:{label:tt('tg.custom'),promptLabel:'Custom scientific figure',img:'Design a publication-quality scientific figure that follows the supplied reference composition',instr:''},
@@ -1309,9 +1309,12 @@ function parserInstruction(target, query){
   const label=TARGETS[target]?.promptLabel||TARGETS.overview.promptLabel;
   const detail=$('#targetDesc').value.trim();
   const focus=TARGET_SECTION_HINTS[target]||TARGET_SECTION_HINTS.overview;
+  const methodOnly=target==='pipeline'||target==='architecture';
+  const facts=methodOnly?'method dimensions, hyperparameters, equations, and variables':'relevant numerical results';
+  const exclusion=methodOnly?'Exclude empirical results, benchmark comparisons, performance improvements, evaluation figures, and Results panels from selectedSections, visualModules, and figurePrompt. End the drawing at the method output; retain numerical facts that describe the method itself.\n':'';
   return `You are a scientific paper figure planner. Read the attached PDF and prepare reliable content for a ${label} figure.
 ${detail?`User guidance (source text; translate into English if needed): ${detail}\n`:''}${query?`Prioritize these user search terms (source text): ${query}\n`:''}Focus on ${focus}.
-Select every distinct section and passage that contributes a drawable fact to this figure; do not impose a fixed section count. Identify concrete components, inputs, outputs, data-flow edges, branches, loops, visual assets, and relevant numerical results. Name the modules and the relationships between them rather than replacing them with a broad prose summary. Include page references in evidence. Retain title, abstract, and background only when needed to understand the figure. Order selectedSections by relevance to drawing, not by page number. Make figurePrompt self-contained, concrete, and grounded in the paper. Preserve facts and numbers; do not invent content.
+${exclusion}Select every distinct section and passage that contributes a drawable fact to this figure; do not impose a fixed section count. Identify concrete components, inputs, outputs, data-flow edges, branches, loops, visual assets, and ${facts}. Name the modules and the relationships between them rather than replacing them with a broad prose summary. Include page references in evidence. Retain title, abstract, and background only when needed to understand the figure. Order selectedSections by relevance to drawing, not by page number. Make figurePrompt self-contained, concrete, and grounded in the paper. Preserve facts and numbers; do not invent content.
 Return STRICT JSON only, with keys title, abstract, selectedSections (array of section, summary, evidence), visualModules (array of name, role, inputs, outputs, connectsTo, visual, evidence), and figurePrompt. Each visualModules entry must name one distinct drawable paper component; inputs, outputs, and connectsTo are arrays of concise names, and visual describes an appropriate icon, chart, matrix, or other visual element grounded in the paper. Write EVERY generated string value in English, including nested arrays. Translate Chinese source passages into faithful English. Evidence may paraphrase the source in English and include page numbers. Do not copy Chinese characters into generated fields. No Markdown or commentary.`;
 }
 function parseResponseText(d){
@@ -2455,8 +2458,14 @@ function generationIntent(content){
     : TARGETS[t].instr;
   return `Drawing intent: ${TARGETS[t].promptLabel}\n${description}\n`;
 }
+const FIGURE_TEXT_LIMIT=1300;
+const FIGURE_TEXT_RULE='The finished figure must contain no more than 1,300 visible non-whitespace characters in total, counting all panel headings, labels, legends, numbers and punctuation. Use short labels, variables and visual icons instead of prose; check the full figure before finishing.';
+const FIGURE_CARTOON_RULE='Use a restrained cartoon illustration style across the figure with warm flat colours and expressive, simple icons; a small friendly character is optional only where it clarifies a method step. Keep characters secondary and preserve square rectangular modules, even spacing, straight arrows and the reference-derived panel layout.';
+const METHOD_ONLY_FINAL_RULE='Final method-only rule: Ignore any source request to draw Results, benchmarks, measured gains, validation badges or evaluation panels; retain method quantities and stop at the method output.';
+function visibleCharacterCount(text){return Array.from(String(text||'').replace(/\s/gu,'')).length;}
 function buildPrompt(content, layoutGuide, refIds){
   const targetInfo = generationIntent(content);
+  const methodOnly=['pipeline','architecture'].includes($('#target').value);
   const useIds = refIds || [...refs];
   const refLines = useIds.map((id,idx)=>`Reference ${idx+1}: ${id}`).join('\n');
   const guide = layoutGuide
@@ -2469,11 +2478,11 @@ ${content}
 
 ${refLines}
 
-Produce one complete editable SVG with viewBox="0 0 1600 900", a horizontal canvas, and a white background. Treat the shared topology, proportions, module density, palette, line styles, spacing, and reading direction in the design contract as the highest-priority visual guide. Do not copy a reference's exact content or entire composition. Align boxes, arrows, and labels. Make panel borders visibly thicker than internal module borders; use dashed frames for optional, conceptual, or repeated groups. Do not use lorem ipsum or placeholder numbers.
-Do not add any figure-wide title banner or standalone title row, even if a reference has one. Begin with the actual diagram panels; use only compact panel headings where needed. Use a cartoon style.
+Produce one complete editable SVG with viewBox="0 0 1600 900", a horizontal canvas, and a white background. Treat the shared topology, proportions, module density, palette, line styles, spacing, and reading direction in the design contract as the highest-priority visual guide. Do not copy a reference's exact content or entire composition. Use axis-aligned, square-corner rectangular modules, even spacing and straight arrow segments. Align boxes, arrows, and labels. Make panel borders visibly thicker than internal module borders; use dashed frames for optional, conceptual, or repeated groups. Do not use lorem ipsum or placeholder numbers.
+Do not add any figure-wide title banner or standalone title row, even if a reference has one. Begin with the actual diagram panels; use only compact panel headings where needed. ${FIGURE_CARTOON_RULE}
 If the design contract gives panel coordinates or font sizes, use those values directly. Fill each defined module region with meaningful content: flows, network diagrams, tables, small charts, thumbnails, icons, legends, or short labels. Preserve intentional margins and group spacing while avoiding large empty blocks. Reuse repeated styles with <defs> where appropriate, and finish the SVG with </svg>.
-Every visible word in the figure must be English, including titles, panel headings, module names, axes, legends, and annotations. Translate any Chinese source terminology faithfully into concise English. Keep all visible text as editable SVG <text> elements in Comic Sans MS; never turn lettering into paths or images. Preserve paper-specific numbers and terms. Keep every text box inside x=0..1600 and y=0..900, inside its containing module, and free of overlap with other labels.
-Give every visible element a stable unique id plus data-role and data-editable="true". Use basic editable SVG shapes and paths; avoid masks, filters, complex clip paths, and a full-canvas bitmap. Keep backgrounds and decorations behind text. Return only the complete SVG, without Markdown or commentary.`;
+Every visible word in the figure must be English, including titles, panel headings, module names, axes, legends, and annotations. Translate any Chinese source terminology faithfully into concise English. Keep all visible text as editable SVG <text> elements in Comic Sans MS; never turn lettering into paths or images. Preserve paper-specific method numbers and terms where relevant. ${FIGURE_TEXT_RULE} Keep every text box inside x=0..1600 and y=0..900, inside its containing module, and free of overlap with other labels.
+Give every visible element a stable unique id plus data-role and data-editable="true". Use basic editable SVG shapes and paths; avoid masks, filters, complex clip paths, and a full-canvas bitmap. Keep backgrounds and decorations behind text. ${methodOnly?METHOD_ONLY_FINAL_RULE:''} Return only the complete SVG, without Markdown or commentary.`;
 }
 const SVG_SYS = 'You are a world-class scientific figure designer. Based on the user paper content and the attached reference figures, output exactly ONE complete, self-contained SVG. Treat the supplied reference-derived design contract as the highest-priority visual constraint: preserve its shared panel topology, relative proportions, nesting, spacing rhythm, density, palette, stroke language and reading direction. Do not force a fixed number of side-by-side panels or a generic grid. Never add a figure-wide title banner or standalone title row, even if a reference has one; start with the diagram panels and use a cartoon style. Produce a richly populated, publication-quality composition: fill most reference-defined module regions with meaningful diagrams, mini charts, thumbnails, icons, legends or short labels, while preserving intentional gutters and avoiding conspicuous empty areas. Translate any Chinese paper terms into concise English labels. Every visible title, panel heading, module name, axis, legend and annotation must be in English; no Chinese characters may appear in the figure. Exact wording is secondary to layout richness because labels will be edited later; use short readable English labels and clean editable text slots rather than paragraphs. Use Comic Sans MS for every visible title, label, axis, legend and annotation; keep all lettering as editable SVG text. Preserve editable export semantics: give every visible element a stable id plus data-role and data-editable="true"; keep labels as SVG <text>, use basic shapes and paths, avoid masks/filters/outlined text, use viewBox="0 0 1600 900", and never flatten the whole figure into one bitmap. Output SVG markup only, no explanations or code fences.';
 
@@ -2802,7 +2811,7 @@ function panelBoxFor(node, labelBox, canvas){
 
 function auditGeometry(svgText){
   const defects = [];
-  const stats = {texts:0, overflow:0, panel:0, overlap:0, panelsFound:0, panelSkipped:0, viewBox:null};
+  const stats = {texts:0, visibleCharacters:0, overflow:0, panel:0, overlap:0, panelsFound:0, panelSkipped:0, viewBox:null};
   let host=null;
   try{
     const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
@@ -2829,6 +2838,10 @@ function auditGeometry(svgText){
       return (n.textContent||'').trim().length>0;
     });
     stats.texts = nodes.length;
+    stats.visibleCharacters=nodes.reduce((total,n)=>total+visibleCharacterCount(n.textContent),0);
+    if(stats.visibleCharacters>FIGURE_TEXT_LIMIT) defects.push({kind:'text-budget',
+      detail:`visible text has ${stats.visibleCharacters} non-whitespace characters; limit is ${FIGURE_TEXT_LIMIT}`,
+      fix:'shorten or remove redundant labels and prose until the whole figure is at most 1,300 visible non-whitespace characters; preserve method facts, panels, icons and arrows'});
 
     const boxes = [];
     nodes.forEach(n=>{
@@ -2901,7 +2914,7 @@ async function repairSVG(svgText, defects, req){
   const list = defects.map((d,i)=>`${i+1}. ${d.detail} -> ${d.fix}`).join('\n');
   const instruction =
 `Fix ONLY the defects listed below. Change as little as possible: keep every panel, arrow, colour, position and label that is not named here.
-Do not redesign, do not rename labels that are already correct, do not add or remove elements.
+Do not redesign or change panel geometry. If the text budget is listed, shorten or remove only redundant words and labels while preserving method facts, panels, icons and arrows.
 ${list}
 
 Return the complete corrected SVG only, no explanation, no code fences. Start with <svg and end with </svg>.`;
@@ -2975,7 +2988,8 @@ async function auditAndRepair(svgText, req, onProgress, wasTruncated){
     const comicCandidate=svgWithFigureFont(extracted.code);
     const candidate = auditGeometry(comicCandidate);
     log.push({round:rounds, defects:candidate.defects.length, kinds:candidate.defects.map(d=>d.kind)});
-    if(candidate.broken || candidate.defects.length >= report.defects.length) break;
+    if(candidate.broken || candidate.defects.length > report.defects.length ||
+      (candidate.defects.length===report.defects.length && candidate.stats.visibleCharacters>=report.stats.visibleCharacters)) break;
     current = comicCandidate;
     report = candidate;
     repaired = rounds;
@@ -6167,6 +6181,10 @@ function svgPreviewDocument(svg){
 
 function renderSVG(svg, usedVision, useIds, truncated, auditRes){
   svg=svgWithFigureFont(svg);
+  const count=auditRes?.audit?.stats?.visibleCharacters??auditGeometry(svg).stats.visibleCharacters;
+  if(count>FIGURE_TEXT_LIMIT) throw new Error(refsText(
+    `草稿有 ${count} 个非空白字符，超过 ${FIGURE_TEXT_LIMIT} 上限；请重新生成。`,
+    `The draft has ${count} visible non-whitespace characters, above the ${FIGURE_TEXT_LIMIT} limit. Regenerate the draft.`));
   const blob = new Blob([svg],{type:'image/svg+xml'});
   const url = URL.createObjectURL(blob);
   const n = (useIds||[...refs]).length;
@@ -6176,7 +6194,7 @@ function renderSVG(svg, usedVision, useIds, truncated, auditRes){
     <div class="dl"><a class="btn-primary" href="${url}" download="figure-forge-draft.svg">${tt('svg.download')}</a>
     <button type="button" class="btn-ghost" id="regenerateDraft">${refsText('不满意，重新生成草稿','Regenerate draft')}</button>
     <button type="button" class="btn-primary" id="continueToStep4">${refsText('满意，进入第 4 步','Looks good — continue to Step 4')}</button>
-    <span class="hint">${usedVision?tt('svg.hint1',{n:n}):tt('svg.hint2')}${truncated?tt('svg.trunc'):''}${auditNote}</span></div>`;
+    <span class="hint">${usedVision?tt('svg.hint1',{n:n}):tt('svg.hint2')}${truncated?tt('svg.trunc'):''}${auditNote} · ${count}/${FIGURE_TEXT_LIMIT} chars</span></div>`;
   const frame=$('#out iframe');
   if(frame) frame.srcdoc=svgPreviewDocument(svg);
   holdStep3Draft('svg');
@@ -6209,12 +6227,13 @@ function fitImagePrompt(text,budget,available){
   return text.slice(0,low).trimEnd();
 }
 function prioritizedImagePaper(content,budget,available){
+  const methodOnly=['pipeline','architecture'].includes($('#target').value);
   const paragraphs=String(content||'').split(/\n\s*\n/).map((text,index)=>({text:text.trim(),index})).filter(x=>x.text);
   const score=text=>{
     const head=text.slice(0,120).toLowerCase();
     return (/绘图提示|figure prompt|绘图要求|drawing requirement/.test(head)?100:0)
       +(/方法|流程|pipeline|method|framework|architecture|模块|module|input|output|输入|输出/.test(head)?20:0)
-      +(/结果|实验|result|benchmark|metric|性能/.test(head)?10:0)
+      +(/结果|实验|result|benchmark|metric|性能/.test(head)?(methodOnly?-30:10):0)
       -(/^(标题|title|摘要|abstract)[:：]/.test(head)?10:0);
   };
   paragraphs.sort((a,b)=>score(b.text)-score(a.text)||a.index-b.index);
@@ -6252,6 +6271,20 @@ function selectImageRoute(route){
   if(status==='blocked')throw new Error('该生图线路刚刚明确拒绝请求，已暂停 60 秒。输入已保留；请选择其他线路，或稍后再试。');
   return route;
 }
+async function countGeneratedImageText(source,mimeType){
+  const response=await fetch(source);
+  if(!response.ok) throw new Error('Generated image could not be read for the local text check.');
+  const bytes=new Uint8Array(await response.arrayBuffer());
+  let binary='';
+  for(let i=0;i<bytes.length;i+=32768) binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
+  const checked=await fetch('/api/figure-text-count',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({mimeType:mimeType||response.headers.get('Content-Type')||'image/png',data:btoa(binary)}),
+    signal:AbortSignal.timeout(100000)});
+  if(!checked.ok) throw new Error('Local image text check failed; the draft cannot be accepted until OCR works.');
+  const result=await checked.json();
+  if(!Number.isSafeInteger(result.characters)||result.characters<0)throw new Error('Local image text count was invalid.');
+  return result.characters;
+}
 async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted=[]){
   let useIds = refIds||[...refs];
   if(p==='glm' && useIds.length) throw new Error('当前 GLM 位图接口未接入参考图输入，请换用支持参考图的生图模型。');
@@ -6266,6 +6299,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     return genOaiImage(route.base,route.model,route.key,content,route.p,useIds,layoutGuide,[...attempted,requested]);
   attempted=[...attempted,route];
   const nativeGemini=p==='gemini'||usesInfistarGemini(base,model);
+  const methodOnly=['pipeline','architecture'].includes($('#target').value);
   const dimensions=imageRequestDimensions(p,model,ratio,resolution,nativeGemini);
   const tg = TARGETS[$('#target').value] || TARGETS.overview;
   const guide = layoutGuide
@@ -6295,15 +6329,15 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     + `flow strip, a table. `
     + `Every element must earn its place by being relevant to THIS paper: take the modules and parts of `
     + `the reference figures as your vocabulary, but fill them with the components, variables, stages `
-    + `and results that the paper content below actually describes. An element that could belong to any `
+    + `${methodOnly?'and method outputs':'and results'} that the paper content below actually describes. An element that could belong to any `
     + `paper is filler; an element that shows this method's own parts is content. `
     + `Keep the boxes tightly packed within a section, with even small gaps between them so the eye `
     + `separates them; the gaps belong between boxes, not as an empty region inside a section. `
     + `USE DASHED FRAMES FOR A REASON: an optional or future stage, an iterative loop, a repeated `
     + `group, or something outside the core method. A dashed frame that means nothing is worse than `
     + `no frame. `
-    + `Keep the geometry square and orderly: axis-aligned rectangles with at most a slight corner `
-    + `radius, even gaps between boxes, and crisp straight arrows. `
+    + `Keep the geometry square and orderly: axis-aligned rectangles with square corners, even `
+    + `gaps between boxes, and crisp straight arrow segments. `
     + `USE COLOUR TO SEPARATE GROUPS — do not paint everything one tint. `
     + `Give each panel a DIFFERENT pale background tint, so the panels read apart at a glance. `
     + `Within a panel, give the module boxes fills that differ from each other and from the panel `
@@ -6319,7 +6353,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     + `Arrows show the data flow between components, and they carry much of the structure: long `
     + `connectors that span the whole figure, dashed feedback loops that route back to an earlier `
     + `stage, and short arrows inside a group. Small elements may also sit OUTSIDE the main sections `
-    + `— a legend, a partner or dataset icon, a training-loop inset at the side, a result thumbnail `
+    + `— a legend, a partner or dataset icon, a training-loop inset at the side, a ${methodOnly?'method-output':'result'} thumbnail `
     + `beside its stage — which is how real figures keep their middle from looking stuffed. `
     + `Line weight and line style carry meaning here: draw each panel's outer container border clearly `
     + `THICKER than the module boxes inside it, and vary the strokes — dashed borders for optional, `
@@ -6338,7 +6372,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     + `Is any box a near-duplicate of its neighbour, or an element that could sit in any paper? `
     + `Replace it with a different kind of element that is specific to this method. `
     + `Can a reader name what every box contains by looking at it? If a box is generic, make it `
-    + `concrete: name the variable, the stage, the metric or the component it stands for. `
+    + `concrete: name the variable, the stage, ${methodOnly?'or the component':'the metric or the component'} it stands for. `
     + `Does every dashed frame stand for something a reader could name? If not, make it solid or drop it. `
     + `Can a reader follow the flow from the arrows alone? Add a connector if a step is unclear. `
     + `Is the colour varied enough that sections and groups read apart, without turning garish? `
@@ -6347,27 +6381,30 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
   const budget=imagePromptBudget(model);
   const compact=`Create a publication-quality ${ratio} paper figure. Preserve panel hierarchy, arrows, palette and dense meaningful modules.\n`
     +zonePriority
-    +`Populate every zone with this paper's actual method and results. ${tg.img.slice(0,100)}. Short legible labels.\n`
+    +`Populate every zone with this paper's ${methodOnly?'actual method stages and output':'actual method and results'}. ${tg.img.slice(0,100)}. Short legible labels.\n`
     +(budget.unit==='chars' || !hasAnalyzedLayout
       ? fitImagePrompt(layoutGuide||'',budget,Math.floor(budget.limit*(hasAnalyzedLayout?.35:.3)))+'\n'
       : '');
   // Keep the selected intent outside style compression, including custom text.
-  const intent=`Figure language requirement: every visible word in the finished figure must be English, including panel headings, module labels, axes, legends and annotations. Translate Chinese paper terms into concise English; do not draw Chinese characters.\nTypography requirement: use Comic Sans MS for every visible panel heading, label, axis, legend and annotation. Keep text crisp and readable.\nDo not add any figure-wide title banner or standalone title row, even if a reference or the paper title suggests one. Begin with the actual diagram panels; use only compact panel headings where needed. Use a cartoon style.\n`+generationIntent(content)+'\n';
-  const paperReserve=Math.min(imagePromptSize(content,budget),Math.floor(budget.limit*(budget.unit==='tokens'?.25:.35)));
+  const intent=budget.unit==='tokens'
+    ? `Figure language requirement: every visible word in the finished figure must be English. Use Comic Sans MS. Do not add any figure-wide title banner or standalone title row. ${FIGURE_CARTOON_RULE} ${FIGURE_TEXT_RULE}\n`+generationIntent(content)+'\n'
+    : `Figure language requirement: every visible word in the finished figure must be English, including panel headings, module labels, axes, legends and annotations. Translate Chinese paper terms into concise English; do not draw Chinese characters.\nTypography requirement: use Comic Sans MS for every visible panel heading, label, axis, legend and annotation. Keep text crisp and readable.\nDo not add any figure-wide title banner or standalone title row, even if a reference or the paper title suggests one. Begin with the actual diagram panels; use only compact panel headings where needed.\n${FIGURE_CARTOON_RULE}\n${FIGURE_TEXT_RULE}\n`+generationIntent(content)+'\n';
+  const suffix=methodOnly?'\n'+METHOD_ONLY_FINAL_RULE:'';
+  const paperReserve=Math.min(imagePromptSize(content,budget),Math.floor(budget.limit*(budget.unit==='tokens'?.2:.35)));
   const paperHeader='\nPaper content (figure-critical facts first):\n';
-  if(p!=='gemini' && imagePromptSize(intent+paperHeader,budget)+paperReserve>=budget.limit){
+  if(p!=='gemini' && imagePromptSize(intent+paperHeader+suffix,budget)+paperReserve>=budget.limit){
     throw new Error(GAL_I18N.lang==='en'
       ? 'The drawing intent is too long for this image model. Shorten it or choose another model.'
       : '绘图意图超出当前图像模型的提示词预算，请缩短自定义描述或更换模型。');
   }
   const promptBase=budget.unit==='tokens' || imagePromptSize(detailedPrompt,budget)>budget.limit-paperReserve
     ? compact : detailedPrompt;
-  const fittedBase=fitImagePrompt(promptBase,budget,budget.limit-paperReserve-imagePromptSize(intent+paperHeader,budget));
-  const paper=prioritizedImagePaper(content,budget,budget.limit-imagePromptSize(intent+fittedBase+paperHeader,budget));
+  const fittedBase=fitImagePrompt(promptBase,budget,budget.limit-paperReserve-imagePromptSize(intent+paperHeader+suffix,budget));
+  const paper=prioritizedImagePaper(content,budget,budget.limit-imagePromptSize(intent+fittedBase+paperHeader+suffix,budget));
   // Native Gemini is counted against its own multimodal context, below. Do not
   // apply the generic 6,000-character gateway ceiling before counting.
   let geminiStyle=detailedPrompt;
-  let imgPrompt=p==='gemini' ? intent+geminiStyle+paperHeader+content : intent+fittedBase+paperHeader+paper;
+  let imgPrompt=p==='gemini' ? intent+geminiStyle+paperHeader+content+suffix : intent+fittedBase+paperHeader+paper+suffix;
   let body;
   let endpoint='/images/generations';
   let usedRefs=false;
@@ -6397,7 +6434,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
       const omittedLabels=[];
       let styleCondensed=false;
       const imageParts=body.contents[0].parts.slice(1).map(part=>`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-      const rebuild=paperText=>geminiImageRequest(base,model,intent+geminiStyle+paperHeader+paperText,imageParts,dimensions).body;
+      const rebuild=paperText=>geminiImageRequest(base,model,intent+geminiStyle+paperHeader+paperText+suffix,imageParts,dimensions).body;
       if(count>60000){
         geminiStyle=`Required canvas ${ratio}. ${tg.img}.\n${zonePriority}\n${guide}Preserve panel hierarchy, module density, arrows, palette, and short readable English labels. Populate every zone with paper-specific visual modules.\n`;
         styleCondensed=true;
@@ -6481,13 +6518,17 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     recordImageRoute({...route,references:usedRefs},'blocked');
     throw new Error(tt('img.resolutionMismatch',{resolution,width:actualWidth,height:actualHeight}));
   }
+  const visibleCharacters=await countGeneratedImageText(exportImgSrc,imageMime);
+  if(visibleCharacters>FIGURE_TEXT_LIMIT)throw new Error(refsText(
+    `草稿 OCR 识别出 ${visibleCharacters} 个非空白字符，超过 ${FIGURE_TEXT_LIMIT} 上限；请重新生成。`,
+    `OCR found ${visibleCharacters} visible non-whitespace characters, above the ${FIGURE_TEXT_LIMIT} limit. Regenerate the draft.`));
   recordImageRoute({...route,references:usedRefs},'verified');
   $('#out').style.display='block';
   $('#out').innerHTML = `<img data-step3-output="true" src="${esc(imgSrc)}" alt="draft">
     <div class="dl"><button type="button" class="btn-primary" id="dlImg">${tt('img.download')}</button>
     <button type="button" class="btn-ghost" id="regenerateDraft">${refsText('不满意，重新生成草稿','Regenerate draft')}</button>
     <button type="button" class="btn-primary" id="continueToStep4">${refsText('满意，进入第 4 步','Looks good — continue to Step 4')}</button>
-    <span class="hint">${r.referenceFallback?tt('img.referenceFallback'):usedRefs?tt('img.hintRef',{n:useIds.length}):tt('img.hint')} · ${ratio} · ${actualWidth}×${actualHeight}px · ${esc(model)}${attempted.length>1?' · 已切换已验证备用线路':''}</span></div>`;
+    <span class="hint">${r.referenceFallback?tt('img.referenceFallback'):usedRefs?tt('img.hintRef',{n:useIds.length}):tt('img.hint')} · ${ratio} · ${actualWidth}×${actualHeight}px · ${esc(model)} · OCR ${visibleCharacters}/${FIGURE_TEXT_LIMIT} chars${attempted.length>1?' · 已切换已验证备用线路':''}</span></div>`;
   // Bind the bitmap download as soon as Step 3 has its verified image. Step 4
   // can take minutes and must never gate or replace this button.
   $('#dlImg').onclick = async ()=>{

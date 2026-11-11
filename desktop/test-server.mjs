@@ -17,7 +17,7 @@ test('desktop server serves only bundled content and private runtime images',asy
   writeFileSync(join(privateRoot,'images','ref_1.png'),'PNG');
   writeFileSync(join(privateRoot,'special_ids.txt'),'SECRET');
   let upstream;
-  const server=createDesktopServer({staticRoot,privateRoot,fetchImpl:async(url,init)=>{
+  const server=createDesktopServer({staticRoot,privateRoot,ocrImpl:async()=>({characters:42}),fetchImpl:async(url,init)=>{
     upstream={url,headers:init.headers,body:JSON.parse(init.body.toString())};
     return new Response(JSON.stringify({candidates:[]}),{headers:{'Content-Type':'application/json'}});
   }});
@@ -37,6 +37,8 @@ test('desktop server serves only bundled content and private runtime images',asy
     assert.equal(upstream.url,'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent');
     assert.equal(upstream.headers['x-goog-api-key'],'fake');
     assert.equal(upstream.headers.Authorization,undefined);
+    const ocr=await fetch(origin+'/api/figure-text-count',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:'{"mimeType":"image/png","data":"YQ=="}'});
+    assert.deepEqual(await ocr.json(),{characters:42});
   }finally{await new Promise(resolve=>server.close(resolve));rmSync(root,{recursive:true,force:true});}
 });
 

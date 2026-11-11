@@ -2,12 +2,13 @@ import http from 'node:http';
 import {createReadStream, existsSync, statSync} from 'node:fs';
 import {resolve, extname, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {countFigureText} from '../forge/figure-text-ocr.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const mime = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.json':'application/json','.css':'text/css','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml','.gif':'image/gif','.wasm':'application/wasm','.onnx':'application/octet-stream','.bin':'application/octet-stream'};
 const allowedModels = new Set(['gemini-3.1-flash-image','gemini-3-pro-image']);
 
-export function createPersonalServer({fetchImpl=fetch}={}) {
+export function createPersonalServer({fetchImpl=fetch,ocrImpl=countFigureText}={}) {
   return http.createServer(async (req,res) => {
     res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('X-Content-Type-Options','nosniff');
@@ -16,6 +17,20 @@ export function createPersonalServer({fetchImpl=fetch}={}) {
     if (req.headers.host !== `127.0.0.1:${req.socket.localPort}`) { res.writeHead(403).end(); return; }
     let url;
     try { url = new URL(req.url, local); } catch { res.writeHead(400).end(); return; }
+    if(url.pathname==='/api/figure-text-count'){
+      if(req.method!=='POST'||req.headers.origin!==local){res.writeHead(403).end();return;}
+      let size=0;const chunks=[];
+      try{
+        for await(const chunk of req){size+=chunk.length;if(size>43*1024*1024)throw new Error('Request too large');chunks.push(chunk);}
+        const payload=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        const result=await ocrImpl(payload);
+        if(!Number.isSafeInteger(result?.characters)||result.characters<0)throw new Error('Invalid OCR result');
+        res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify(result));
+      }catch{
+        res.writeHead(size>43*1024*1024?413:503,{'Content-Type':'application/json'}).end(JSON.stringify({error:{message:'Local image text check failed.'}}));
+      }
+      return;
+    }
     if (url.pathname === '/api/gemini-image' || url.pathname === '/api/gemini-count' || url.pathname === '/api/openai-count') {
       if (req.method !== 'POST' || req.headers.origin !== local) { res.writeHead(403).end(); return; }
       const openai = url.pathname === '/api/openai-count';

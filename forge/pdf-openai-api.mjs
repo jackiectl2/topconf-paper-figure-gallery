@@ -3,11 +3,21 @@ import {pdfResponseJSON} from './chat-api.mjs';
 
 export async function countOpenAIPdfTokens(origin, body, key, {fetchImpl=fetch}={}) {
   if (body?.model !== 'gpt-6.1-sol') throw new Error('Token counting is configured for GPT 6.1 SOL only.');
+  // The count endpoint accepts the input schema, not generation-only settings
+  // such as max_output_tokens or reasoning effort.
+  const countBody={model:body.model,input:body.input};
   const response=await fetchImpl(origin+'/api/openai-count',{
     method:'POST',headers:{'Content-Type':'application/json','x-openai-api-key':key,'x-openai-model':body.model},
-    body:JSON.stringify(body)
+    body:JSON.stringify(countBody)
   });
-  if(!response.ok) throw new Error('GPT input-token count failed (HTTP '+response.status+').');
+  if(!response.ok){
+    let detail='';
+    try{
+      const error=(await response.json()).error;
+      detail=[error?.code,error?.param].filter(x=>typeof x==='string'&&/^[\w.-]+$/.test(x)).join(', ');
+    }catch{}
+    throw Object.assign(new Error('GPT input-token count failed (HTTP '+response.status+(detail?'; '+detail:'')+').'),{stopPdfFallback:true});
+  }
   const value=(await response.json()).input_tokens;
   if(!Number.isSafeInteger(value)||value<0) throw new Error('GPT input-token count was invalid.');
   return value;

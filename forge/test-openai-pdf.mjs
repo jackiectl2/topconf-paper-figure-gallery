@@ -43,11 +43,12 @@ test('GPT input count forwards the exact multimodal request and rejects invalid 
   const count=await countOpenAIPdfTokens('http://127.0.0.1:8767',body,'fake-key',{fetchImpl:async(url,options)=>{
     assert.equal(url,'http://127.0.0.1:8767/api/openai-count');
     assert.equal(options.headers['x-openai-api-key'],'fake-key');
-    assert.deepEqual(JSON.parse(options.body),body);
+    assert.deepEqual(JSON.parse(options.body),{model:body.model,input:body.input});
     return new Response(JSON.stringify({input_tokens:4321}));
   }});
   assert.equal(count,4321);
   await assert.rejects(countOpenAIPdfTokens('http://127.0.0.1:8767',body,'fake-key',{fetchImpl:async()=>new Response('{}')}),/invalid/);
+  await assert.rejects(countOpenAIPdfTokens('http://127.0.0.1:8767',body,'fake-key',{fetchImpl:async()=>new Response(JSON.stringify({error:{code:'unknown_parameter',param:'max_output_tokens'}}),{status:400})}),e=>e.stopPdfFallback&&/HTTP 400; unknown_parameter, max_output_tokens/.test(e.message));
 });
 
 test('successful default-effort request needs no recovery',async()=>{

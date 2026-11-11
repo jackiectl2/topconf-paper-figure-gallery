@@ -5,8 +5,11 @@ const {chromium}=await import('../_local/test/node_modules/playwright-core/index
 const sections=Array.from({length:12},(_,i)=>({section:`Section ${i+1}`,summary:`Component ${i+1} receives input and emits output to the next stage.`,evidence:`Page ${i+1}`}));
 const visualModules=Array.from({length:12},(_,i)=>({name:`Component ${i+1}`,role:`Stage ${i+1}`,inputs:[`Input ${i+1}`],outputs:[`Output ${i+1}`],connectsTo:i<11?[`Component ${i+2}`]:[],visual:'icon',evidence:`Page ${i+1}`}));
 const calls=[];
+let rejectCount=false;
 const server=createPersonalServer({fetchImpl:async(url,init)=>{
-  calls.push({url,headers:init.headers,body:JSON.parse(init.body.toString())});
+  const body=JSON.parse(init.body.toString());
+  calls.push({url,headers:init.headers,body});
+  if(rejectCount||Object.keys(body).sort().join(',')!=='input,model') return new Response(JSON.stringify({error:{code:'unknown_parameter',param:'max_output_tokens'}}),{status:400,headers:{'Content-Type':'application/json'}});
   return new Response(JSON.stringify({input_tokens:4500}),{headers:{'Content-Type':'application/json'}});
 }});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -41,8 +44,15 @@ try{
   assert.equal(calls.length,1);
   assert.equal(calls[0].url,'https://api.openai.com/v1/responses/input_tokens');
   assert.equal(calls[0].headers.Authorization,'Bearer fake-test-key');
+  assert.deepEqual(Object.keys(calls[0].body).sort(),['input','model']);
   assert.equal(responses.length,1);
   assert.equal(responses[0].input[0].content[0].type,'input_file');
+  rejectCount=true;
+  await page.locator('#pdfFile').setInputFiles({name:'synthetic-failure.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nerror fixture')});
+  await page.waitForFunction(()=>document.querySelector('#contentModeHint')?.dataset.state==='error',{timeout:15000});
+  assert.equal(calls.length,2,'a failed count must not repeat on text and image fallbacks');
+  assert.equal(responses.length,1,'generation must not start after failed count');
+  assert.match(await page.locator('#parseErr').textContent(),/HTTP 400; unknown_parameter, max_output_tokens/);
   assert.deepEqual(errors,[]);
   console.log('PASS browser: mocked PDF upload retains all 12 sections and counts GPT input');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

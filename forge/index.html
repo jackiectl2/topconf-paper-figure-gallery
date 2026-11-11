@@ -1482,7 +1482,7 @@ async function callPdfParser(mode, payload){
   if(!base||!key||!model) throw new Error(tt('ps.nocfg'));
   // Isolated PDF-only official Responses transport; shared generation/export stays unchanged.
   const officialPdf = async body => {
-    const {requestOpenAIPdf,countOpenAIPdfTokens}=await import('./pdf-openai-api.mjs?v=20261111-density1');
+    const {requestOpenAIPdf,countOpenAIPdfTokens}=await import('./pdf-openai-api.mjs?v=20261111-density2');
     const request=withReasoning(body,'parse');
     if(model==='gpt-6.1-sol'){
       const count=await countOpenAIPdfTokens(location.origin,request,key);

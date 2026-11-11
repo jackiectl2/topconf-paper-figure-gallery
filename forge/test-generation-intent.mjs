@@ -21,6 +21,7 @@ function harness(){
   };
   runInNewContext(`${targets}\n${helpers}\n${budgets}
     function imagePrompt(content,model){
+      const p='oai';
       const tg=TARGETS[$('#target').value] || TARGETS.overview;
       ${imageAssembly}
       return imgPrompt;

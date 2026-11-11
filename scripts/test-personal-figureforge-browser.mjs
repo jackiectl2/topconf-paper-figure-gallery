@@ -6,7 +6,12 @@ let imageBase64='';
 let geminiStatus=200;
 let svgDraft=false;
 const geminiCalls=[];
+const geminiCounts=[];
 const server=createPersonalServer({fetchImpl:async(url,init)=>{
+  if(url.endsWith(':countTokens')){
+    geminiCounts.push({url,headers:init.headers,body:JSON.parse(init.body.toString())});
+    return new Response(JSON.stringify({totalTokens:2400}),{status:200,headers:{'Content-Type':'application/json'}});
+  }
   geminiCalls.push({url,headers:init.headers,body:JSON.parse(init.body.toString())});
   return new Response(JSON.stringify(geminiStatus===200?{candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:imageBase64}}]}}]}:{error:{message:'Mock provider rejected the request'}}),{status:geminiStatus,headers:{'Content-Type':'application/json'}});
 }});
@@ -86,6 +91,8 @@ try{
   assert.equal('temperature' in chatBodies[0],false);
   assert.equal(chatBodies[0].messages[1].content.filter(x=>x.type==='image_url').length,4);
   assert.equal(geminiCalls.length,1);
+  assert.equal(geminiCounts.length,1);
+  assert.deepEqual(geminiCounts[0].body.contents,geminiCalls[0].body.contents);
   assert.equal(geminiCalls[0].headers['x-goog-api-key'],'mock-gemini-key');
   assert.equal('Authorization' in geminiCalls[0].headers,false);
   assert.equal(geminiCalls[0].body.contents[0].parts.filter(x=>x.inlineData).length,3);

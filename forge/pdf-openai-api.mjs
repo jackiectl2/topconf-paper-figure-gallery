@@ -1,6 +1,18 @@
 // PDF parsing only. Step 3 generation and Step 4 reconstruction do not use this module.
 import {pdfResponseJSON} from './chat-api.mjs';
 
+export async function countOpenAIPdfTokens(origin, body, key, {fetchImpl=fetch}={}) {
+  if (body?.model !== 'gpt-6.1-sol') throw new Error('Token counting is configured for GPT 6.1 SOL only.');
+  const response=await fetchImpl(origin+'/api/openai-count',{
+    method:'POST',headers:{'Content-Type':'application/json','x-openai-api-key':key,'x-openai-model':body.model},
+    body:JSON.stringify(body)
+  });
+  if(!response.ok) throw new Error('GPT input-token count failed (HTTP '+response.status+').');
+  const value=(await response.json()).input_tokens;
+  if(!Number.isSafeInteger(value)||value<0) throw new Error('GPT input-token count was invalid.');
+  return value;
+}
+
 function apiError(status, data, requestId) {
   const code = String(data?.error?.code || data?.error?.type || '');
   let message;
@@ -33,7 +45,8 @@ export async function requestOpenAIPdf(base, body, key, {
   const model = String(initial.model || '');
   const outputLimit = /^gpt-4o-2024-05-13$|^gpt-4-turbo(?:-|$)/.test(model) ? 4096 :
     /^gpt-4o(?:-|$)/.test(model) ? 16384 : /^gpt-4\.1(?:-|$)/.test(model) ? 32768 : 100000;
-  initial.max_output_tokens = Math.min(25000, outputLimit);
+  const sol=model==='gpt-6.1-sol';
+  initial.max_output_tokens = Math.min(sol?48000:25000, outputLimit);
   let current = initial, recovered = false, rateRetried = false;
   for (;;) {
     const response = await fetchImpl(url.href, {
@@ -75,7 +88,7 @@ export async function requestOpenAIPdf(base, body, key, {
       }
       recovered = true;
       current = structuredClone(initial);
-      current.max_output_tokens = Math.min(100000, outputLimit);
+      current.max_output_tokens = Math.min(sol?48000:100000, outputLimit);
       current.input.push({role: 'user', content: [{type: 'input_text', text:
         'The previous output failed JSON or English-language validation. Return a complete, concise JSON object with selectedSections and nonempty summary fields. Translate Chinese source text into faithful English in every generated field. Do not include Markdown or commentary.'}]});
     }

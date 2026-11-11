@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
-import {usesInfistarGemini,geminiImageRequest,geminiImageResult} from './image-api.mjs';
+import {usesInfistarGemini,geminiImageRequest,geminiImageResult,countGeminiImageRequest} from './image-api.mjs';
 import {figureCanvas,imageRequestDimensions,verifyImageRatio,verifyImageResolution} from './aspect-ratio.mjs';
 import {infistarAuditStatus} from './infistar-audit.mjs';
+const countBody=geminiImageRequest('http://127.0.0.1:8767','gemini-3-pro-image','draw full modules',['data:image/png;base64,YQ==']).body;
+assert.equal(await countGeminiImageRequest('http://127.0.0.1:8767','gemini-3-pro-image',countBody,'fake-key',{fetchImpl:async(url,options)=>{
+  assert.equal(url,'http://127.0.0.1:8767/api/gemini-count');
+  assert.equal(options.headers['x-gemini-api-key'],'fake-key');
+  assert.deepEqual(JSON.parse(options.body).contents,countBody.contents);
+  return new Response(JSON.stringify({totalTokens:1234}));
+}}),1234);
+await assert.rejects(countGeminiImageRequest('http://127.0.0.1:8767','gemini-3-pro-image',countBody,'fake-key',{fetchImpl:async()=>new Response('{}',{status:503})}),/HTTP 503/);
 for(const [ratio,height] of [['16:9',900],['3:2',1067],['4:3',1200],['1:1',1600]]){
   assert.equal(figureCanvas(ratio).height,height);
   assert.equal(verifyImageRatio(1600,height,ratio),true);

@@ -16,9 +16,9 @@ test('desktop server serves only bundled content and private runtime images',asy
   writeFileSync(join(privateRoot,'manifest.json'),'{}');
   writeFileSync(join(privateRoot,'images','ref_1.png'),'PNG');
   writeFileSync(join(privateRoot,'special_ids.txt'),'SECRET');
-  let upstream;
+  const upstream=[];
   const server=createDesktopServer({staticRoot,privateRoot,ocrImpl:async()=>({characters:42}),fetchImpl:async(url,init)=>{
-    upstream={url,headers:init.headers,body:JSON.parse(init.body.toString())};
+    upstream.push({url,headers:init.headers,body:JSON.parse(init.body.toString())});
     return new Response(JSON.stringify({candidates:[]}),{headers:{'Content-Type':'application/json'}});
   }});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -34,9 +34,22 @@ test('desktop server serves only bundled content and private runtime images',asy
     assert.equal((await fetch(origin+'/api/gemini-image',{method:'POST',headers:{Origin:'https://foreign.example','x-gemini-api-key':'fake','x-gemini-model':'gemini-3-pro-image'},body:'{}'})).status,403);
     const result=await fetch(origin+'/api/gemini-image',{method:'POST',headers:{Origin:origin,'x-gemini-api-key':'fake','x-gemini-model':'gemini-3-pro-image','Content-Type':'application/json'},body:'{"contents":[]}'});
     assert.equal(result.status,200);
-    assert.equal(upstream.url,'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent');
-    assert.equal(upstream.headers['x-goog-api-key'],'fake');
-    assert.equal(upstream.headers.Authorization,undefined);
+    assert.equal(upstream[0].url,'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent');
+    assert.equal(upstream[0].headers['x-goog-api-key'],'fake');
+    assert.equal(upstream[0].headers.Authorization,undefined);
+    const geminiCount=await fetch(origin+'/api/gemini-count',{method:'POST',headers:{Origin:origin,'x-gemini-api-key':'fake','x-gemini-model':'gemini-3-pro-image','Content-Type':'application/json'},body:'{"contents":[]}'});
+    assert.equal(geminiCount.status,200);
+    assert.equal(upstream[1].url,'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:countTokens');
+    assert.equal(upstream[1].headers['x-goog-api-key'],'fake');
+    assert.equal(upstream[1].headers.Authorization,undefined);
+    const openaiCount=await fetch(origin+'/api/openai-count',{method:'POST',headers:{Origin:origin,'x-openai-api-key':'fake','x-openai-model':'gpt-6.1-sol','Content-Type':'application/json'},body:'{"model":"gpt-6.1-sol","input":[]}'});
+    assert.equal(openaiCount.status,200);
+    assert.equal(upstream[2].url,'https://api.openai.com/v1/responses/input_tokens');
+    assert.equal(upstream[2].headers.Authorization,'Bearer fake');
+    assert.equal(upstream[2].headers['x-goog-api-key'],undefined);
+    assert.equal((await fetch(origin+'/api/openai-count',{method:'POST',headers:{Origin:origin,'x-openai-api-key':'fake','x-openai-model':'gpt-6.1-sol','Content-Type':'application/json'},body:'{"model":"gpt-5","input":[]}'})).status,400);
+    assert.equal((await fetch(origin+'/api/gemini-count',{method:'POST',headers:{Origin:'https://foreign.example','x-gemini-api-key':'fake','x-gemini-model':'gemini-3-pro-image'},body:'{"contents":[]}'})).status,403);
+    assert.equal(upstream.length,3);
     const ocr=await fetch(origin+'/api/figure-text-count',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:'{"mimeType":"image/png","data":"YQ=="}'});
     assert.deepEqual(await ocr.json(),{characters:42});
   }finally{await new Promise(resolve=>server.close(resolve));rmSync(root,{recursive:true,force:true});}

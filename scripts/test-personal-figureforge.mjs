@@ -32,7 +32,11 @@ test('OpenAI default and explicit reasoning use compatible chat fields',()=>{
 
 test('localhost Gemini relay uses native API, never bearer authorization or logged keys',async()=>{
   const calls=[];
-  const server=createPersonalServer({fetchImpl:async(url,init)=>{
+  const server=createPersonalServer({ocrImpl:async payload=>{
+    assert.equal(payload.mimeType,'image/png');
+    assert.equal(payload.data,'YQ==');
+    return {characters:1299};
+  },fetchImpl:async(url,init)=>{
     calls.push({url,headers:init.headers,body:JSON.parse(init.body.toString())});
     return new Response(JSON.stringify({candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:'YQ=='}}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});
   }});
@@ -43,12 +47,22 @@ test('localhost Gemini relay uses native API, never bearer authorization or logg
     const response=await fetch(origin+'/api/gemini-image',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','x-gemini-api-key':'fake-test-key','x-gemini-model':'gemini-3.1-flash-image'},body:JSON.stringify(request)});
     assert.equal(response.status,200);
     assert.equal(calls.length,1);
+    const counted=await fetch(origin+'/api/gemini-count',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','x-gemini-api-key':'fake-test-key','x-gemini-model':'gemini-3-pro-image'},body:JSON.stringify({contents:request.contents})});
+    assert.equal(counted.status,200);
+    assert.match(calls[1].url,/gemini-3-pro-image:countTokens$/);
+    const openaiCount=await fetch(origin+'/api/openai-count',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','x-openai-api-key':'fake-test-key','x-openai-model':'gpt-6.1-sol'},body:JSON.stringify({model:'gpt-6.1-sol',input:[]})});
+    assert.equal(openaiCount.status,200);
+    assert.equal(calls[2].url,'https://api.openai.com/v1/responses/input_tokens');
+    assert.equal(calls[2].headers.Authorization,'Bearer fake-test-key');
     assert.match(calls[0].url,/generativelanguage\.googleapis\.com\/v1beta\/models\/gemini-3\.1-flash-image:generateContent$/);
     assert.equal(calls[0].headers['x-goog-api-key'],'fake-test-key');
     assert.equal('Authorization' in calls[0].headers,false);
     assert.deepEqual(calls[0].body,request);
     assert.equal((await fetch(origin+'/_local/paperbananabench/special_ids.txt')).status,404);
     assert.equal((await fetch(origin+'/api/gemini-image',{method:'POST',headers:{Origin:'https://other.example','x-gemini-api-key':'fake-test-key','x-gemini-model':'gemini-3.1-flash-image'}})).status,403);
-    assert.equal(calls.length,1);
+    const ocr=await fetch(origin+'/api/figure-text-count',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({mimeType:'image/png',data:'YQ=='})});
+    assert.deepEqual(await ocr.json(),{characters:1299});
+    assert.equal((await fetch(origin+'/api/figure-text-count',{method:'POST',headers:{Origin:'https://other.example'},body:'{}'})).status,403);
+    assert.equal(calls.length,3);
   }finally{await new Promise(resolve=>server.close(resolve));}
 });

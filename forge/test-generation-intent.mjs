@@ -21,7 +21,9 @@ function harness(){
   };
   runInNewContext(`${targets}\n${helpers}\n${budgets}
     function imagePrompt(content,model){
+      const p='oai';
       const tg=TARGETS[$('#target').value] || TARGETS.overview;
+      const methodOnly=['pipeline','architecture'].includes($('#target').value);
       ${imageAssembly}
       return imgPrompt;
     }
@@ -43,11 +45,19 @@ for(const target of ['overview','architecture','pipeline','results','custom']){
       for(const prompt of [svg,bitmap]){
         assert.ok(prompt.includes('Comic Sans MS'));
         assert.match(prompt,/Do not add any figure-wide title banner or standalone title row/);
-        assert.match(prompt,/Use a cartoon style/);
+        assert.match(prompt,/restrained cartoon illustration style/);
+        assert.match(prompt,/Aim for about 1,300 visible non-whitespace characters or fewer/);
+        assert.match(prompt,/square rectangular modules, even spacing, straight arrows/);
         assert.ok(prompt.includes(ctx.targets[target].promptLabel));
         assert.ok(prompt.includes(description));
         assert.ok(prompt.includes('input passes through encoder'));
         if(target!=='custom') assert.ok(!prompt.includes(nodes['#targetDesc'].value));
+      }
+      if(target==='pipeline'||target==='architecture'){
+        assert.match(bitmap,/without empirical results|Do not add a Results stage/);
+        assert.doesNotMatch(bitmap,/method and results|results that the paper content|result thumbnail/);
+        assert.ok(bitmap.lastIndexOf('Final method-only rule:')>bitmap.indexOf('input passes through encoder'));
+        assert.ok(svg.lastIndexOf('Final method-only rule:')>svg.indexOf('input passes through encoder'));
       }
       const budget=ctx.imagePromptBudget(model);
       assert.ok(ctx.imagePromptSize(bitmap,budget)<=budget.limit);

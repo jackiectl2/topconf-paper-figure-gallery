@@ -34,7 +34,7 @@ export function pdfResponseJSON(data){
     const result=JSON.parse(clean.slice(first,last+1));
     if(!Array.isArray(result.selectedSections)||!result.selectedSections.some(x=>typeof x?.summary==='string'&&x.summary.trim()))
       throw new Error('JSON 缺少相关章节摘要 selectedSections');
-    const generated=[result.title,result.abstract,result.figurePrompt,...result.selectedSections.flatMap(section=>[section?.section,section?.summary,section?.evidence])];
+    const generated=[result.title,result.abstract,result.figurePrompt,...result.selectedSections.flatMap(section=>[section?.section,section?.summary,section?.evidence]),...(Array.isArray(result.visualModules)?result.visualModules.flatMap(module=>Object.values(module||{}).flat()):[])];
     if(generated.some(value=>typeof value==='string'&&/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(value)))
       throw new Error('generated paper summary contains non-English text');
     return result;

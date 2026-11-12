@@ -1,11 +1,12 @@
 import http from 'node:http';
 import {createReadStream, existsSync, statSync} from 'node:fs';
 import {extname, join, resolve, sep} from 'node:path';
+import {countFigureText} from '../forge/figure-text-ocr.mjs';
 
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.json':'application/json','.css':'text/css; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml','.gif':'image/gif','.wasm':'application/wasm','.onnx':'application/octet-stream','.bin':'application/octet-stream'};
 const allowedModels=new Set(['gemini-3.1-flash-image','gemini-3-pro-image']);
 
-export function createDesktopServer({staticRoot,privateRoot,fetchImpl=fetch}){
+export function createDesktopServer({staticRoot,privateRoot,fetchImpl=fetch,ocrImpl=countFigureText}){
   if(!staticRoot||!privateRoot)throw new Error('Both staticRoot and privateRoot are required');
   return http.createServer(async(req,res)=>{
     res.setHeader('Referrer-Policy','no-referrer');
@@ -15,19 +16,39 @@ export function createDesktopServer({staticRoot,privateRoot,fetchImpl=fetch}){
     if(req.headers.host!==`127.0.0.1:${req.socket.localPort}`){res.writeHead(403).end();return;}
     let url;
     try{url=new URL(req.url,local);}catch{res.writeHead(400).end();return;}
-    if(url.pathname==='/api/gemini-image'){
+    if(url.pathname==='/api/figure-text-count'){
       if(req.method!=='POST'||req.headers.origin!==local){res.writeHead(403).end();return;}
-      const key=String(req.headers['x-gemini-api-key']||'');
-      const model=String(req.headers['x-gemini-model']||'');
-      if(!key||!allowedModels.has(model)){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({error:{message:'Select a supported Gemini image model and enter its key.'}}));return;}
-      const chunks=[];let size=0;
+      let size=0;const chunks=[];
       try{
-        for await(const chunk of req){size+=chunk.length;if(size>32*1024*1024)throw new Error('Request too large');chunks.push(chunk);}
-        const upstream=await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:Buffer.concat(chunks)});
+        for await(const chunk of req){size+=chunk.length;if(size>43*1024*1024)throw new Error('Request too large');chunks.push(chunk);}
+        const result=await ocrImpl(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+        if(!Number.isSafeInteger(result?.characters)||result.characters<0)throw new Error('Invalid OCR result');
+        res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify(result));
+      }catch{
+        res.writeHead(size>43*1024*1024?413:503,{'Content-Type':'application/json'}).end(JSON.stringify({error:{message:'Local image text check failed.'}}));
+      }
+      return;
+    }
+    if(['/api/gemini-image','/api/gemini-count','/api/openai-count'].includes(url.pathname)){
+      if(req.method!=='POST'||req.headers.origin!==local){res.writeHead(403).end();return;}
+      const openai=url.pathname==='/api/openai-count';
+      const key=String(req.headers[openai?'x-openai-api-key':'x-gemini-api-key']||'');
+      const model=String(req.headers[openai?'x-openai-model':'x-gemini-model']||'');
+      if(!key||(openai?model!=='gpt-6.1-sol':!allowedModels.has(model))){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({error:{message:'Select a supported model and enter its key.'}}));return;}
+      const chunks=[];let size=0;const maxBytes=openai?70*1024*1024:32*1024*1024;
+      try{
+        for await(const chunk of req){size+=chunk.length;if(size>maxBytes)throw new Error('Request too large');chunks.push(chunk);}
+        const payload=Buffer.concat(chunks);
+        let parsed;
+        try{parsed=JSON.parse(payload.toString('utf8'));}catch{res.writeHead(400).end();return;}
+        if(openai?parsed?.model!==model||!Array.isArray(parsed?.input):!Array.isArray(parsed?.contents)){res.writeHead(400).end();return;}
+        const upstream=await fetchImpl(openai?'https://api.openai.com/v1/responses/input_tokens':
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:${url.pathname==='/api/gemini-count'?'countTokens':'generateContent'}`,
+          {method:'POST',headers:openai?{'Content-Type':'application/json',Authorization:'Bearer '+key}:{'Content-Type':'application/json','x-goog-api-key':key},body:payload});
         const body=Buffer.from(await upstream.arrayBuffer());
         res.writeHead(upstream.status,{'Content-Type':'application/json'}).end(body);
       }catch{
-        res.writeHead(size>32*1024*1024?413:502,{'Content-Type':'application/json'}).end(JSON.stringify({error:{message:size>32*1024*1024?'Request too large':'Gemini connection failed.'}}));
+        res.writeHead(size>maxBytes?413:502,{'Content-Type':'application/json'}).end(JSON.stringify({error:{message:size>maxBytes?'Request too large':'Token count or Gemini connection failed.'}}));
       }
       return;
     }

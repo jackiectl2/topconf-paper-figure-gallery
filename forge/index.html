@@ -477,6 +477,7 @@
     <section class="box b-amber" style="margin-top:13px">
       <h4><span class="bi" aria-hidden="true">✍️</span><span data-i18n="box.paper"></span><small data-i18n="box.paper.tip"></small></h4>
       <textarea id="paper" data-i18n-ph="paperPh"></textarea>
+      <p class="bnote" id="pdfBudgetStatus" role="status" aria-live="polite"></p>
       <div class="row">
         <button class="pdf-upload-btn" id="uploadBtn" type="button"><span class="pdf-upload-icon" aria-hidden="true">PDF</span><span class="pdf-upload-copy"><strong id="uploadLabel" data-i18n="upload"></strong><small data-i18n="upload.small"></small></span><span class="pdf-upload-arrow" aria-hidden="true">↑</span></button>
         <input type="file" id="pdfFile" accept="application/pdf" hidden>
@@ -587,6 +588,7 @@
       <div class="bfield" style="margin-top:9px"><span class="blab">视觉推理强度</span><select id="visualReasoningEffort" aria-label="视觉推理强度"><option value="">服务商默认</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">极高</option></select></div>
       <p class="bnote">用于参考图归纳。需模型及服务商支持；默认不指定强度。</p>
       <p class="bnote" id="sentRefsSummary" role="status" aria-live="polite"></p>
+      <p class="bnote" id="imageBudgetStatus" role="status" aria-live="polite"></p>
       <div class="refs-strip" id="sentRefsPreview"></div>
     </section>
 
@@ -876,9 +878,9 @@ const TARGETS = {
  overview:{label:tt('tg.overview'),promptLabel:'Figure 1 overview / teaser',img:'Design a publication-quality Figure 1 teaser/overview figure that follows the supplied reference composition',
    instr:'Show the relationship between the input, core method, and output or effects. Follow the reference design contract for module count, panel division, reading direction, and information density.'},
  architecture:{label:tt('tg.architecture'),promptLabel:'Method architecture',img:'Design a publication-quality method architecture figure that follows the supplied reference composition',
-   instr:'Show the model components, hierarchy, data flow, and connections. Follow the reference design contract for component count, nesting, panel division, and reading direction.'},
+   instr:'Show the model components, hierarchy, data flow, and connections. End at the method output, without empirical results, benchmark values, performance claims, or evaluation panels. Method dimensions, hyperparameters, equations, and variables are allowed. Follow the reference design contract for component count, nesting, panel division, and reading direction.'},
  pipeline:{label:tt('tg.pipeline'),promptLabel:'Pipeline / process',img:'Design a publication-quality pipeline/process figure that follows the supplied reference composition',
-   instr:'Show stages from input to output, including branches, loops, or feedback where the paper supports them. Follow the reference design contract for layout, direction, containers, and arrows.'},
+   instr:'Show method stages from input to the method output, including branches, loops, or feedback where the paper supports them. Do not add a Results stage, empirical results, benchmark values, performance claims, or evaluation panels. Method dimensions, hyperparameters, equations, and variables are allowed. Follow the reference design contract for layout, direction, containers, and arrows.'},
  results:{label:tt('tg.results'),promptLabel:'Results',img:'Design a publication-quality results figure that follows the supplied reference composition',
    instr:'Show samples, methods, metrics, and comparisons. Follow the reference design contract for panels, chart types, grouping, legends, and reading direction.'},
  custom:{label:tt('tg.custom'),promptLabel:'Custom scientific figure',img:'Design a publication-quality scientific figure that follows the supplied reference composition',instr:''},
@@ -1289,6 +1291,7 @@ $('#targetDesc').oninput = ()=>localStorage.setItem('ff_target_desc', $('#target
 
 /* ---------------- PDF parsing (model-first; no PDF.js semantic fallback) ---------------- */
 let pdfContext = null;
+let pdfInputCounts=[];
 let pdfIntentSeq = 0;
 const TARGET_SECTION_HINTS = {
   overview:'research problem, core method, main contributions, key results, and applications',
@@ -1306,10 +1309,13 @@ function parserInstruction(target, query){
   const label=TARGETS[target]?.promptLabel||TARGETS.overview.promptLabel;
   const detail=$('#targetDesc').value.trim();
   const focus=TARGET_SECTION_HINTS[target]||TARGET_SECTION_HINTS.overview;
+  const methodOnly=target==='pipeline'||target==='architecture';
+  const facts=methodOnly?'method dimensions, hyperparameters, equations, and variables':'relevant numerical results';
+  const exclusion=methodOnly?'Exclude empirical results, benchmark comparisons, performance improvements, evaluation figures, and Results panels from selectedSections, visualModules, and figurePrompt. End the drawing at the method output; retain numerical facts that describe the method itself.\n':'';
   return `You are a scientific paper figure planner. Read the attached PDF and prepare reliable content for a ${label} figure.
 ${detail?`User guidance (source text; translate into English if needed): ${detail}\n`:''}${query?`Prioritize these user search terms (source text): ${query}\n`:''}Focus on ${focus}.
-Select the most relevant sections and contiguous passages from the actual paper. Summarize explicit figure requirements, method stages, key modules and their inputs and outputs, and essential results and numbers. Retain title, abstract, and background only when needed to understand the figure. Order selectedSections by relevance to drawing, not by page number. Make figurePrompt self-contained, concrete, and grounded in the paper. Preserve facts and numbers; do not invent content.
-Return STRICT JSON only, with keys title, abstract, selectedSections (array of section, summary, evidence), and figurePrompt. Write EVERY generated string value in English, including the title, abstract, section names, summaries, evidence descriptions, and figurePrompt. Translate Chinese source passages into faithful English. Evidence may paraphrase the source in English and include page numbers. Do not copy Chinese characters into generated fields. No Markdown or commentary.`;
+${exclusion}Select every distinct section and passage that contributes a drawable fact to this figure; do not impose a fixed section count. Identify concrete components, inputs, outputs, data-flow edges, branches, loops, visual assets, and ${facts}. Name the modules and the relationships between them rather than replacing them with a broad prose summary. Include page references in evidence. Retain title, abstract, and background only when needed to understand the figure. Order selectedSections by relevance to drawing, not by page number. Make figurePrompt self-contained, concrete, and grounded in the paper. Preserve facts and numbers; do not invent content.
+Return STRICT JSON only, with keys title, abstract, selectedSections (array of section, summary, evidence), visualModules (array of name, role, inputs, outputs, connectsTo, visual, evidence), and figurePrompt. Each visualModules entry must name one distinct drawable paper component; inputs, outputs, and connectsTo are arrays of concise names, and visual describes an appropriate icon, chart, matrix, or other visual element grounded in the paper. Write EVERY generated string value in English, including nested arrays. Translate Chinese source passages into faithful English. Evidence may paraphrase the source in English and include page numbers. Do not copy Chinese characters into generated fields. No Markdown or commentary.`;
 }
 function parseResponseText(d){
   if(d?.output_text) return d.output_text;
@@ -1363,6 +1369,7 @@ function loadPdfjs(){
   return pdfjsPromise;
 }
 let pdfText = null, pdfImgs = null;
+const pdfImageBatches=new Map();
 function pdfBytes(){
   // pdf.js takes ownership of the buffer it is given (it transfers it to the
   // worker), so every call has to hand over an independent copy — otherwise a
@@ -1389,13 +1396,14 @@ async function extractPdfText(){
 }
 /* Page images: the universal channel for vision models — works for scanned
    papers and keeps layout, figures and tables readable. */
-async function extractPdfImages(){
-  if(pdfImgs && pdfImgs.name===pdfContext.fileName) return pdfImgs;
+async function extractPdfImages(start=1){
+  const cacheKey=pdfContext.fileName+':'+start;
+  if(pdfImageBatches.has(cacheKey)) return pdfImageBatches.get(cacheKey);
   const lib = await loadPdfjs();
   const doc = await lib.getDocument({data: pdfBytes(), isEvalSupported:false}).promise;
-  const n = Math.min(doc.numPages, MAX_PDF_IMAGES);
+  const n = Math.min(doc.numPages-start+1, MAX_PDF_IMAGES);
   const imgs = [];
-  for(let p=1;p<=n;p++){
+  for(let p=start;p<start+n;p++){
     const page = await doc.getPage(p);
     const base = page.getViewport({scale:1});
     const scale = Math.max(1, Math.min(1.6, 1400/Math.max(base.width, base.height)));
@@ -1405,7 +1413,8 @@ async function extractPdfImages(){
     await page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise;
     imgs.push(cv.toDataURL('image/jpeg', 0.72));
   }
-  pdfImgs = {name:pdfContext.fileName, imgs, pages:n, total:doc.numPages};
+  pdfImgs = {name:pdfContext.fileName, imgs, pages:n, total:doc.numPages, start};
+  pdfImageBatches.set(cacheKey,pdfImgs);
   return pdfImgs;
 }
 function showParseErr(msg){ const el=$('#parseErr'); if(!el) return; el.innerHTML=esc(tt('ps.errline',{m:msg})); el.hidden=false; }
@@ -1476,14 +1485,22 @@ async function callPdfParser(mode, payload){
   if(!base||!key||!model) throw new Error(tt('ps.nocfg'));
   // Isolated PDF-only official Responses transport; shared generation/export stays unchanged.
   const officialPdf = async body => {
-    const {requestOpenAIPdf}=await import('./pdf-openai-api.mjs?v=20261028-pdf1');
-    return requestOpenAIPdf(base,withReasoning(body,'parse'),key,{fetchImpl:fetchWithTimeout});
+    const {requestOpenAIPdf,countOpenAIPdfTokens}=await import('./pdf-openai-api.mjs?v=20261111-density2');
+    const request=withReasoning(body,'parse');
+    if(model==='gpt-6.1-sol'){
+      const count=await countOpenAIPdfTokens(location.origin,request,key);
+      pdfInputCounts.push(count);
+      $('#pdfBudgetStatus').textContent=`GPT PDF input: ${pdfInputCounts.map(n=>n.toLocaleString()).join(' + ')} / 900,000 tokens per request${count>272000?' · long-context API pricing applies to this request':''}`;
+      if(count>900000) throw new Error('PDF exceeds the 900,000-token GPT input ceiling. Use a shorter PDF or extracted text.');
+    }
+    return requestOpenAIPdf(base,request,key,{fetchImpl:fetchWithTimeout});
   };
   const instruction=parserInstruction($('#target').value,$('#contentQuery').value.trim());
   let r, body;
   if(mode==='text'){
     const ex=payload;
-    const text = instruction+'\n\nExtracted text from '+pdfContext.fileName+' ('+ex.pages+' pages):\n'+relevantPdfText(ex.text,$('#target').value,$('#contentQuery').value.trim());
+    const officialSol=/openai\.com/i.test(base)&&model==='gpt-6.1-sol';
+    const text = instruction+'\n\nExtracted text from '+pdfContext.fileName+' ('+ex.pages+' pages):\n'+(officialSol?ex.text:relevantPdfText(ex.text,$('#target').value,$('#contentQuery').value.trim()));
     if(c.proto==='anthropic'){
       body={model,max_tokens:5000,system:'Return strict JSON only, with all generated strings in English.',messages:[{role:'user',content:[{type:'text',text}]}]};
       r=await fetchWithTimeout(base+'/v1/messages',{method:'POST',headers:anthropicHeaders(key),body:JSON.stringify(withReasoning(body,'parse'))},Infinity);
@@ -1497,7 +1514,7 @@ async function callPdfParser(mode, payload){
     }
   }else if(mode==='img'){
     const ex=payload;
-    const note = instruction+'\n\nRendered page images from '+pdfContext.fileName+' ('+ex.pages+' selected of '+ex.total+' total pages).';
+    const note = instruction+'\n\nRendered page images from '+pdfContext.fileName+' (pages '+(ex.start||1)+'–'+((ex.start||1)+ex.pages-1)+' of '+ex.total+').';
     if(c.proto==='anthropic'){
       const blocks=ex.imgs.map(u=>({type:'image',source:{type:'base64',media_type:'image/jpeg',data:dataURIToParts(u).data}}));
       blocks.push({type:'text',text:note});
@@ -1547,11 +1564,50 @@ async function callPdfParser(mode, payload){
     return pdfResponseJSON(JSON.parse(retryRaw));
   }
 }
+async function callPdfParserCovered(mode,payload){
+  const officialSol=parserModel()==='gpt-6.1-sol' && new URL(baseURL()).origin==='https://api.openai.com';
+  if(!officialSol || mode==='doc') return callPdfParser(mode,payload);
+  const results=[];
+  if(mode==='text'){
+    const pages=payload.text.split(/(?=\[\[Page \d+\]\])/).filter(Boolean);
+    const batches=[];let current=[];let chars=0;
+    for(const page of pages){
+      if(current.length && chars+page.length>500000){batches.push(current);current=[];chars=0;}
+      current.push(page);chars+=page.length;
+    }
+    if(current.length)batches.push(current);
+    for(const batch of batches)results.push(await callPdfParser('text',{...payload,text:batch.join('\n\n'),pages:batch.length}));
+    $('#pdfBudgetStatus').textContent+=` · PDF text covered ${pages.length}/${payload.pages} pages`;
+  }else{
+    for(let start=1;start<=payload.total;start+=MAX_PDF_IMAGES){
+      const batch=start===1?payload:await extractPdfImages(start);
+      results.push(await callPdfParser('img',batch));
+    }
+    $('#pdfBudgetStatus').textContent+=` · rendered PDF covered ${payload.total}/${payload.total} pages`;
+  }
+  if(!results.length) throw new Error('The PDF contained no parseable pages.');
+  const seen=new Set(),selectedSections=[],visualModules=[];
+  for(const result of results)for(const section of result.selectedSections||[]){
+    const id=String(section.section||'')+'\n'+String(section.summary||'');
+    if(!seen.has(id)){seen.add(id);selectedSections.push(section);}
+  }
+  const moduleNames=new Set();
+  for(const result of results)for(const module of result.visualModules||[]){
+    const name=String(module?.name||'').trim();
+    if(name&&!moduleNames.has(name)){moduleNames.add(name);visualModules.push(module);}
+  }
+  return {title:results[0].title,abstract:results[0].abstract,selectedSections,visualModules,
+    figurePrompt:results.map(r=>r.figurePrompt).filter(Boolean).join('\n\n')};
+}
 function renderPdfSummary(data){
-  const sections=Array.isArray(data.selectedSections)?data.selectedSections.filter(x=>x&&x.summary).slice(0,6):[];
+  const sections=Array.isArray(data.selectedSections)?data.selectedSections.filter(x=>x&&x.summary):[];
   if(!sections.length) throw new Error('解析模型没有返回相关章节摘要');
-  const pieces=[data.figurePrompt&&`Figure prompt: ${data.figurePrompt}`,sections.map(x=>`[${x.section||'Relevant section'}] ${x.summary}${x.evidence?`\nEvidence: ${x.evidence}`:''}`).join('\n\n'),data.title&&`Title: ${data.title}`,data.abstract&&`Abstract highlights: ${data.abstract}`].filter(Boolean);
-  $('#paper').value=pieces.join('\n\n').slice(0,12000);
+  const modules=Array.isArray(data.visualModules)?data.visualModules.filter(x=>x&&x.name):[];
+  const names=x=>Array.isArray(x)?x.join(', '):String(x||'');
+  const inventory=modules.map(x=>`- ${x.name}: ${x.role||''}${names(x.inputs)?`; inputs: ${names(x.inputs)}`:''}${names(x.outputs)?`; outputs: ${names(x.outputs)}`:''}${names(x.connectsTo)?`; connects to: ${names(x.connectsTo)}`:''}${x.visual?`; draw as: ${x.visual}`:''}${x.evidence?`; evidence: ${x.evidence}`:''}`).join('\n');
+  const pieces=[inventory&&`Drawable module inventory (${modules.length}):\n${inventory}`,sections.map(x=>`[${x.section||'Relevant section'}] ${x.summary}${x.evidence?`\nEvidence: ${x.evidence}`:''}`).join('\n\n'),data.figurePrompt&&`Figure prompt: ${data.figurePrompt}`,data.title&&`Title: ${data.title}`,data.abstract&&`Abstract highlights: ${data.abstract}`].filter(Boolean);
+  $('#paper').value=pieces.join('\n\n');
+  $('#pdfBudgetStatus').textContent+=` · ${sections.length} relevant sections · ${modules.length} drawable modules · ${$('#paper').value.length.toLocaleString()} characters retained`;
 }
 function setParseStatus(state){
   const el=$('#contentModeHint'); el.dataset.state=state;
@@ -1559,6 +1615,7 @@ function setParseStatus(state){
 }
 async function selectPdfContext(){
   if(!pdfContext || $('#contentMode').value==='free') return;
+  pdfInputCounts=[];$('#pdfBudgetStatus').textContent='';
   const seq=++pdfIntentSeq;
   const setHint = (key,vars)=>{ setParseStatus('loading'); $('#contentModeHint').textContent=tt(key,vars||{}); };
   clearParseErr();
@@ -1567,7 +1624,7 @@ async function selectPdfContext(){
   // Channel order: the provider's own document part when it has one, then the
   // locally extracted text, then rendered page images (vision models).
   const order=[];
-  if(docMode()!=='none') order.push('doc');
+  if(docMode()!=='none' && !(parserModel()==='gpt-6.1-sol' && pdfContext.size>50*1000*1000)) order.push('doc');
   order.push('text');
   if(modelSeesImages()) order.push('img');
   const failures=[];
@@ -1590,7 +1647,7 @@ async function selectPdfContext(){
           setExtractMetaKey('ps.meta1c', {m:parserModel()||'–'}, false);
           payload = await extractPdfImages();
         }
-        result = await callPdfParser(ch, payload);
+        result = await callPdfParserCovered(ch, payload);
         used = ch;
         break;
       }catch(e){
@@ -1633,11 +1690,12 @@ $('#pdfFile').onchange=async e=>{
   const file=e.target.files[0]; if(!file)return;
   const btn=$('#uploadBtn'); btn.disabled=true; btn.setAttribute('aria-busy','true'); $('#uploadLabel').textContent=tt('up.reading');
   try{
-    if(file.size>25*1024*1024) throw new Error(tt('up.size'));
+    const officialSolPdf=parserModel()==='gpt-6.1-sol' && new URL(baseURL()).origin==='https://api.openai.com';
+    if(file.size>(officialSolPdf?100*1000*1000:25*1024*1024)) throw new Error(officialSolPdf?'GPT PDF upload must be at most 100 MB; larger files require splitting before upload.':tt('up.size'));
     const dataUri=await fileToDataURI(file);
     const buf=await file.arrayBuffer();
     pdfContext={fileName:file.name,mime:file.type||'application/pdf',dataUri,buf,size:file.size};
-    pdfText=null;
+    pdfText=null;pdfImgs=null;pdfImageBatches.clear();$('#pdfBudgetStatus').textContent='';
     setExtractMetaKey('up.meta', {f:file.name,s:Math.round(file.size/1024)}, false);
     if($('#contentMode').value!=='free') await selectPdfContext();
   }catch(err){ showErr(tt('up.fail',{m:err.message})); showParseErr(tt('up.fail',{m:err.message})); }
@@ -2400,8 +2458,14 @@ function generationIntent(content){
     : TARGETS[t].instr;
   return `Drawing intent: ${TARGETS[t].promptLabel}\n${description}\n`;
 }
+const FIGURE_TEXT_TARGET=1300;
+const FIGURE_TEXT_RULE='Aim for about 1,300 visible non-whitespace characters or fewer in the finished figure, counting panel headings, labels, legends, numbers and punctuation. Prefer short labels, variables and visual icons to prose, while keeping the method complete.';
+const FIGURE_CARTOON_RULE='Use a restrained cartoon illustration style across the figure with warm flat colours and expressive, simple icons; a small friendly character is optional only where it clarifies a method step. Keep characters secondary and preserve square rectangular modules, even spacing, straight arrows and the reference-derived panel layout.';
+const METHOD_ONLY_FINAL_RULE='Final method-only rule: Ignore any source request to draw Results, benchmarks, measured gains, validation badges or evaluation panels; retain method quantities and stop at the method output.';
+function visibleCharacterCount(text){return Array.from(String(text||'').replace(/\s/gu,'')).length;}
 function buildPrompt(content, layoutGuide, refIds){
   const targetInfo = generationIntent(content);
+  const methodOnly=['pipeline','architecture'].includes($('#target').value);
   const useIds = refIds || [...refs];
   const refLines = useIds.map((id,idx)=>`Reference ${idx+1}: ${id}`).join('\n');
   const guide = layoutGuide
@@ -2414,11 +2478,11 @@ ${content}
 
 ${refLines}
 
-Produce one complete editable SVG with viewBox="0 0 1600 900", a horizontal canvas, and a white background. Treat the shared topology, proportions, module density, palette, line styles, spacing, and reading direction in the design contract as the highest-priority visual guide. Do not copy a reference's exact content or entire composition. Align boxes, arrows, and labels. Make panel borders visibly thicker than internal module borders; use dashed frames for optional, conceptual, or repeated groups. Do not use lorem ipsum or placeholder numbers.
-Do not add any figure-wide title banner or standalone title row, even if a reference has one. Begin with the actual diagram panels; use only compact panel headings where needed. Use a cartoon style.
+Produce one complete editable SVG with viewBox="0 0 1600 900", a horizontal canvas, and a white background. Treat the shared topology, proportions, module density, palette, line styles, spacing, and reading direction in the design contract as the highest-priority visual guide. Do not copy a reference's exact content or entire composition. Use axis-aligned, square-corner rectangular modules, even spacing and straight arrow segments. Align boxes, arrows, and labels. Make panel borders visibly thicker than internal module borders; use dashed frames for optional, conceptual, or repeated groups. Do not use lorem ipsum or placeholder numbers.
+Do not add any figure-wide title banner or standalone title row, even if a reference has one. Begin with the actual diagram panels; use only compact panel headings where needed. ${FIGURE_CARTOON_RULE}
 If the design contract gives panel coordinates or font sizes, use those values directly. Fill each defined module region with meaningful content: flows, network diagrams, tables, small charts, thumbnails, icons, legends, or short labels. Preserve intentional margins and group spacing while avoiding large empty blocks. Reuse repeated styles with <defs> where appropriate, and finish the SVG with </svg>.
-Every visible word in the figure must be English, including titles, panel headings, module names, axes, legends, and annotations. Translate any Chinese source terminology faithfully into concise English. Keep all visible text as editable SVG <text> elements in Comic Sans MS; never turn lettering into paths or images. Preserve paper-specific numbers and terms. Keep every text box inside x=0..1600 and y=0..900, inside its containing module, and free of overlap with other labels.
-Give every visible element a stable unique id plus data-role and data-editable="true". Use basic editable SVG shapes and paths; avoid masks, filters, complex clip paths, and a full-canvas bitmap. Keep backgrounds and decorations behind text. Return only the complete SVG, without Markdown or commentary.`;
+Every visible word in the figure must be English, including titles, panel headings, module names, axes, legends, and annotations. Translate any Chinese source terminology faithfully into concise English. Keep all visible text as editable SVG <text> elements in Comic Sans MS; never turn lettering into paths or images. Preserve paper-specific method numbers and terms where relevant. ${FIGURE_TEXT_RULE} Keep every text box inside x=0..1600 and y=0..900, inside its containing module, and free of overlap with other labels.
+Give every visible element a stable unique id plus data-role and data-editable="true". Use basic editable SVG shapes and paths; avoid masks, filters, complex clip paths, and a full-canvas bitmap. Keep backgrounds and decorations behind text. ${methodOnly?METHOD_ONLY_FINAL_RULE:''} Return only the complete SVG, without Markdown or commentary.`;
 }
 const SVG_SYS = 'You are a world-class scientific figure designer. Based on the user paper content and the attached reference figures, output exactly ONE complete, self-contained SVG. Treat the supplied reference-derived design contract as the highest-priority visual constraint: preserve its shared panel topology, relative proportions, nesting, spacing rhythm, density, palette, stroke language and reading direction. Do not force a fixed number of side-by-side panels or a generic grid. Never add a figure-wide title banner or standalone title row, even if a reference has one; start with the diagram panels and use a cartoon style. Produce a richly populated, publication-quality composition: fill most reference-defined module regions with meaningful diagrams, mini charts, thumbnails, icons, legends or short labels, while preserving intentional gutters and avoiding conspicuous empty areas. Translate any Chinese paper terms into concise English labels. Every visible title, panel heading, module name, axis, legend and annotation must be in English; no Chinese characters may appear in the figure. Exact wording is secondary to layout richness because labels will be edited later; use short readable English labels and clean editable text slots rather than paragraphs. Use Comic Sans MS for every visible title, label, axis, legend and annotation; keep all lettering as editable SVG text. Preserve editable export semantics: give every visible element a stable id plus data-role and data-editable="true"; keep labels as SVG <text>, use basic shapes and paths, avoid masks/filters/outlined text, use viewBox="0 0 1600 900", and never flatten the whole figure into one bitmap. Output SVG markup only, no explanations or code fences.';
 
@@ -2568,6 +2632,7 @@ function setStep(n,state){
 }
 $('#genBtn').onclick = async ()=>{
   $('#genErr').hidden=true; $('#out').style.display='none';
+  $('#imageBudgetStatus').textContent='';
   const content = $('#paper').value.trim();
   if(!content){ showErr(tt('gen.content')); return; }
   const p = $('#provider').value, c = cfg();
@@ -2746,7 +2811,7 @@ function panelBoxFor(node, labelBox, canvas){
 
 function auditGeometry(svgText){
   const defects = [];
-  const stats = {texts:0, overflow:0, panel:0, overlap:0, panelsFound:0, panelSkipped:0, viewBox:null};
+  const stats = {texts:0, visibleCharacters:0, overflow:0, panel:0, overlap:0, panelsFound:0, panelSkipped:0, viewBox:null};
   let host=null;
   try{
     const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
@@ -2773,6 +2838,7 @@ function auditGeometry(svgText){
       return (n.textContent||'').trim().length>0;
     });
     stats.texts = nodes.length;
+    stats.visibleCharacters=nodes.reduce((total,n)=>total+visibleCharacterCount(n.textContent),0);
 
     const boxes = [];
     nodes.forEach(n=>{
@@ -6111,6 +6177,7 @@ function svgPreviewDocument(svg){
 
 function renderSVG(svg, usedVision, useIds, truncated, auditRes){
   svg=svgWithFigureFont(svg);
+  const count=auditRes?.audit?.stats?.visibleCharacters??auditGeometry(svg).stats.visibleCharacters;
   const blob = new Blob([svg],{type:'image/svg+xml'});
   const url = URL.createObjectURL(blob);
   const n = (useIds||[...refs]).length;
@@ -6120,7 +6187,7 @@ function renderSVG(svg, usedVision, useIds, truncated, auditRes){
     <div class="dl"><a class="btn-primary" href="${url}" download="figure-forge-draft.svg">${tt('svg.download')}</a>
     <button type="button" class="btn-ghost" id="regenerateDraft">${refsText('不满意，重新生成草稿','Regenerate draft')}</button>
     <button type="button" class="btn-primary" id="continueToStep4">${refsText('满意，进入第 4 步','Looks good — continue to Step 4')}</button>
-    <span class="hint">${usedVision?tt('svg.hint1',{n:n}):tt('svg.hint2')}${truncated?tt('svg.trunc'):''}${auditNote}</span></div>`;
+    <span class="hint">${usedVision?tt('svg.hint1',{n:n}):tt('svg.hint2')}${truncated?tt('svg.trunc'):''}${auditNote} · ${count.toLocaleString()} ${refsText('个非空白字符','non-whitespace characters')} (${refsText('目标','target')} ${FIGURE_TEXT_TARGET.toLocaleString()}${count>FIGURE_TEXT_TARGET?refsText('，已超出','; above target'):''})</span></div>`;
   const frame=$('#out iframe');
   if(frame) frame.srcdoc=svgPreviewDocument(svg);
   holdStep3Draft('svg');
@@ -6153,12 +6220,13 @@ function fitImagePrompt(text,budget,available){
   return text.slice(0,low).trimEnd();
 }
 function prioritizedImagePaper(content,budget,available){
+  const methodOnly=['pipeline','architecture'].includes($('#target').value);
   const paragraphs=String(content||'').split(/\n\s*\n/).map((text,index)=>({text:text.trim(),index})).filter(x=>x.text);
   const score=text=>{
     const head=text.slice(0,120).toLowerCase();
     return (/绘图提示|figure prompt|绘图要求|drawing requirement/.test(head)?100:0)
       +(/方法|流程|pipeline|method|framework|architecture|模块|module|input|output|输入|输出/.test(head)?20:0)
-      +(/结果|实验|result|benchmark|metric|性能/.test(head)?10:0)
+      +(/结果|实验|result|benchmark|metric|性能/.test(head)?(methodOnly?-30:10):0)
       -(/^(标题|title|摘要|abstract)[:：]/.test(head)?10:0);
   };
   paragraphs.sort((a,b)=>score(b.text)-score(a.text)||a.index-b.index);
@@ -6171,14 +6239,18 @@ function prioritizedImagePaper(content,budget,available){
   }
   return selected.join('\n\n');
 }
-function compactImageGuide(j){
+function compactImageGuide(j,full=false){
   if(!j || !Array.isArray(j.layoutBlueprint)) return '';
   const zones=j.layoutBlueprint.slice(0,16).map((z,i)=>{
     if(!z || typeof z!=='object') return '';
-    const name=String(z.role||z.id||z.name||'module').slice(0,10);
+    const role=String(z.role||z.id||z.name||'module').trim();
+    const name=full?role:role.slice(0,10);
     const nums=[z.x,z.y,z.w,z.h].map(Number);
     const box=nums.every(Number.isFinite)?` @${nums.map((n,k)=>Math.round(n/(k%2?900:1600)*100)).join(',')}%`:'';
-    return `${i+1}:${name}${box}`;
+    const kinds=Array.isArray(z.moduleKinds)?z.moduleKinds.join(', '):'';
+    const count=Number.isFinite(Number(z.moduleCount))?`; ${z.moduleCount} modules`:'';
+    const occupancy=Number.isFinite(Number(z.occupancy))?`; ${z.occupancy}% occupied`:'';
+    return `${i+1}:${name}${box}${full?count+occupancy+(kinds?`; kinds: ${kinds}`:'')+(z.nesting?`; nesting: ${z.nesting}`:'')+(z.flow?`; flow: ${z.flow}`:''):''}`;
   }).filter(Boolean);
   const palette=Array.isArray(j.palette)?j.palette.slice(0,5).join(',')
     : j.palette && typeof j.palette==='object'
@@ -6191,6 +6263,20 @@ function selectImageRoute(route){
   if(status==='verified')return route;
   if(status==='blocked')throw new Error('该生图线路刚刚明确拒绝请求，已暂停 60 秒。输入已保留；请选择其他线路，或稍后再试。');
   return route;
+}
+async function countGeneratedImageText(source,mimeType){
+  const response=await fetch(source);
+  if(!response.ok) throw new Error('Generated image could not be read for the local text check.');
+  const bytes=new Uint8Array(await response.arrayBuffer());
+  let binary='';
+  for(let i=0;i<bytes.length;i+=32768) binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
+  const checked=await fetch('/api/figure-text-count',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({mimeType:mimeType||response.headers.get('Content-Type')||'image/png',data:btoa(binary)}),
+    signal:AbortSignal.timeout(100000)});
+  if(!checked.ok) throw new Error('Local image text check failed; the draft cannot be accepted until OCR works.');
+  const result=await checked.json();
+  if(!Number.isSafeInteger(result.characters)||result.characters<0)throw new Error('Local image text count was invalid.');
+  return result.characters;
 }
 async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted=[]){
   let useIds = refIds||[...refs];
@@ -6206,6 +6292,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     return genOaiImage(route.base,route.model,route.key,content,route.p,useIds,layoutGuide,[...attempted,requested]);
   attempted=[...attempted,route];
   const nativeGemini=p==='gemini'||usesInfistarGemini(base,model);
+  const methodOnly=['pipeline','architecture'].includes($('#target').value);
   const dimensions=imageRequestDimensions(p,model,ratio,resolution,nativeGemini);
   const tg = TARGETS[$('#target').value] || TARGETS.overview;
   const guide = layoutGuide
@@ -6213,7 +6300,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     : '';
   const logicalCanvas=figureCanvas(ratio);
   const hasAnalyzedLayout=passMode==='two' && !!analysis?.j;
-  const zonePriority=compactImageGuide(hasAnalyzedLayout?analysis.j:null);
+  const zonePriority=compactImageGuide(hasAnalyzedLayout?analysis.j:null,p==='gemini');
   const detailedPrompt = `Required canvas aspect ratio ${ratio}; compose on a ${logicalCanvas.width}×${logicalCanvas.height} logical layout grid. Requested output resolution ${resolution} is independent of the canvas ratio. Preserve this canvas shape and render crisp legible details.\n${zonePriority}\n${guide}`
     + `${tg.img}. Derive a fresh composition from the recurring visual grammar shared by all supplied references; no single reference is a master and no reference is privileged by upload order. `
     + `Mirror the common panel divisions, relative proportions, nesting, reading direction, spacing rhythm, palette, stroke language, arrow language and visual density, while inventing new paper-specific contents. `
@@ -6235,15 +6322,15 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     + `flow strip, a table. `
     + `Every element must earn its place by being relevant to THIS paper: take the modules and parts of `
     + `the reference figures as your vocabulary, but fill them with the components, variables, stages `
-    + `and results that the paper content below actually describes. An element that could belong to any `
+    + `${methodOnly?'and method outputs':'and results'} that the paper content below actually describes. An element that could belong to any `
     + `paper is filler; an element that shows this method's own parts is content. `
     + `Keep the boxes tightly packed within a section, with even small gaps between them so the eye `
     + `separates them; the gaps belong between boxes, not as an empty region inside a section. `
     + `USE DASHED FRAMES FOR A REASON: an optional or future stage, an iterative loop, a repeated `
     + `group, or something outside the core method. A dashed frame that means nothing is worse than `
     + `no frame. `
-    + `Keep the geometry square and orderly: axis-aligned rectangles with at most a slight corner `
-    + `radius, even gaps between boxes, and crisp straight arrows. `
+    + `Keep the geometry square and orderly: axis-aligned rectangles with square corners, even `
+    + `gaps between boxes, and crisp straight arrow segments. `
     + `USE COLOUR TO SEPARATE GROUPS — do not paint everything one tint. `
     + `Give each panel a DIFFERENT pale background tint, so the panels read apart at a glance. `
     + `Within a panel, give the module boxes fills that differ from each other and from the panel `
@@ -6259,7 +6346,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     + `Arrows show the data flow between components, and they carry much of the structure: long `
     + `connectors that span the whole figure, dashed feedback loops that route back to an earlier `
     + `stage, and short arrows inside a group. Small elements may also sit OUTSIDE the main sections `
-    + `— a legend, a partner or dataset icon, a training-loop inset at the side, a result thumbnail `
+    + `— a legend, a partner or dataset icon, a training-loop inset at the side, a ${methodOnly?'method-output':'result'} thumbnail `
     + `beside its stage — which is how real figures keep their middle from looking stuffed. `
     + `Line weight and line style carry meaning here: draw each panel's outer container border clearly `
     + `THICKER than the module boxes inside it, and vary the strokes — dashed borders for optional, `
@@ -6278,7 +6365,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     + `Is any box a near-duplicate of its neighbour, or an element that could sit in any paper? `
     + `Replace it with a different kind of element that is specific to this method. `
     + `Can a reader name what every box contains by looking at it? If a box is generic, make it `
-    + `concrete: name the variable, the stage, the metric or the component it stands for. `
+    + `concrete: name the variable, the stage, ${methodOnly?'or the component':'the metric or the component'} it stands for. `
     + `Does every dashed frame stand for something a reader could name? If not, make it solid or drop it. `
     + `Can a reader follow the flow from the arrows alone? Add a connector if a step is unclear. `
     + `Is the colour varied enough that sections and groups read apart, without turning garish? `
@@ -6287,24 +6374,30 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
   const budget=imagePromptBudget(model);
   const compact=`Create a publication-quality ${ratio} paper figure. Preserve panel hierarchy, arrows, palette and dense meaningful modules.\n`
     +zonePriority
-    +`Populate every zone with this paper's actual method and results. ${tg.img.slice(0,100)}. Short legible labels.\n`
+    +`Populate every zone with this paper's ${methodOnly?'actual method stages and output':'actual method and results'}. ${tg.img.slice(0,100)}. Short legible labels.\n`
     +(budget.unit==='chars' || !hasAnalyzedLayout
       ? fitImagePrompt(layoutGuide||'',budget,Math.floor(budget.limit*(hasAnalyzedLayout?.35:.3)))+'\n'
       : '');
   // Keep the selected intent outside style compression, including custom text.
-  const intent=`Figure language requirement: every visible word in the finished figure must be English, including panel headings, module labels, axes, legends and annotations. Translate Chinese paper terms into concise English; do not draw Chinese characters.\nTypography requirement: use Comic Sans MS for every visible panel heading, label, axis, legend and annotation. Keep text crisp and readable.\nDo not add any figure-wide title banner or standalone title row, even if a reference or the paper title suggests one. Begin with the actual diagram panels; use only compact panel headings where needed. Use a cartoon style.\n`+generationIntent(content)+'\n';
-  const paperReserve=Math.min(imagePromptSize(content,budget),Math.floor(budget.limit*(budget.unit==='tokens'?.25:.35)));
+  const intent=budget.unit==='tokens'
+    ? `Figure language requirement: every visible word in the finished figure must be English. Use Comic Sans MS. Do not add any figure-wide title banner or standalone title row. ${FIGURE_CARTOON_RULE} ${FIGURE_TEXT_RULE}\n`+generationIntent(content)+'\n'
+    : `Figure language requirement: every visible word in the finished figure must be English, including panel headings, module labels, axes, legends and annotations. Translate Chinese paper terms into concise English; do not draw Chinese characters.\nTypography requirement: use Comic Sans MS for every visible panel heading, label, axis, legend and annotation. Keep text crisp and readable.\nDo not add any figure-wide title banner or standalone title row, even if a reference or the paper title suggests one. Begin with the actual diagram panels; use only compact panel headings where needed.\n${FIGURE_CARTOON_RULE}\n${FIGURE_TEXT_RULE}\n`+generationIntent(content)+'\n';
+  const suffix=methodOnly?'\n'+METHOD_ONLY_FINAL_RULE:'';
+  const paperReserve=Math.min(imagePromptSize(content,budget),Math.floor(budget.limit*(budget.unit==='tokens'?.2:.35)));
   const paperHeader='\nPaper content (figure-critical facts first):\n';
-  if(imagePromptSize(intent+paperHeader,budget)+paperReserve>=budget.limit){
+  if(p!=='gemini' && imagePromptSize(intent+paperHeader+suffix,budget)+paperReserve>=budget.limit){
     throw new Error(GAL_I18N.lang==='en'
       ? 'The drawing intent is too long for this image model. Shorten it or choose another model.'
       : '绘图意图超出当前图像模型的提示词预算，请缩短自定义描述或更换模型。');
   }
   const promptBase=budget.unit==='tokens' || imagePromptSize(detailedPrompt,budget)>budget.limit-paperReserve
     ? compact : detailedPrompt;
-  const fittedBase=fitImagePrompt(promptBase,budget,budget.limit-paperReserve-imagePromptSize(intent+paperHeader,budget));
-  const paper=prioritizedImagePaper(content,budget,budget.limit-imagePromptSize(intent+fittedBase+paperHeader,budget));
-  const imgPrompt=intent+fittedBase+paperHeader+paper;
+  const fittedBase=fitImagePrompt(promptBase,budget,budget.limit-paperReserve-imagePromptSize(intent+paperHeader+suffix,budget));
+  const paper=prioritizedImagePaper(content,budget,budget.limit-imagePromptSize(intent+fittedBase+paperHeader+suffix,budget));
+  // Native Gemini is counted against its own multimodal context, below. Do not
+  // apply the generic 6,000-character gateway ceiling before counting.
+  let geminiStyle=detailedPrompt;
+  let imgPrompt=p==='gemini' ? intent+geminiStyle+paperHeader+content+suffix : intent+fittedBase+paperHeader+paper+suffix;
   let body;
   let endpoint='/images/generations';
   let usedRefs=false;
@@ -6324,6 +6417,38 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     base=p==='gemini'?location.origin:request.base;
     endpoint=p==='gemini'?'/api/gemini-image':request.endpoint;
     body=request.body;
+    if(p==='gemini'){
+      const {countGeminiImageRequest}=await import('./image-api.mjs?v=20261111-density1');
+      if(new TextEncoder().encode(JSON.stringify(body)).length>32*1024*1024)
+        throw new Error('Gemini request exceeds the 32 MiB localhost relay limit. Use fewer or smaller reference images.');
+      let count=await countGeminiImageRequest(location.origin,model,body,key);
+      const originalCount=count;
+      let omitted=0;
+      const omittedLabels=[];
+      let styleCondensed=false;
+      const imageParts=body.contents[0].parts.slice(1).map(part=>`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
+      const rebuild=paperText=>geminiImageRequest(base,model,intent+geminiStyle+paperHeader+paperText+suffix,imageParts,dimensions).body;
+      if(count>60000){
+        geminiStyle=`Required canvas ${ratio}. ${tg.img}.\n${zonePriority}\n${guide}Preserve panel hierarchy, module density, arrows, palette, and short readable English labels. Populate every zone with paper-specific visual modules.\n`;
+        styleCondensed=true;
+        body=rebuild(content);
+        count=await countGeminiImageRequest(location.origin,model,body,key);
+      }
+      // Remove whole low-priority paper paragraphs before removing any layout
+      // instruction. Tell the user exactly how much source text was omitted.
+      if(count>60000){
+        const paragraphs=content.split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
+        while(count>60000 && paragraphs.length>1){
+          const dropped=paragraphs.pop();omitted++;omittedLabels.push(dropped.split('\n')[0].slice(0,80));
+          body=rebuild(paragraphs.join('\n\n'));
+          count=await countGeminiImageRequest(location.origin,model,body,key);
+        }
+      }
+      $('#imageBudgetStatus').textContent=`Gemini input: ${count.toLocaleString()} / 60,000 tokens (model maximum 65,536)${styleCondensed?' · repeated style guidance condensed':''}${omitted?` · ${omitted} trailing paper paragraphs omitted from the bitmap request: ${omittedLabels.join(' | ')}; the editor still has the full text`:''}`;
+      if(count>60000) throw new Error(`Gemini request uses ${originalCount.toLocaleString()} input tokens; even after removing low-priority paper paragraphs it exceeds the 60,000-token ceiling. Shorten the paper text.`);
+      const bytes=new TextEncoder().encode(JSON.stringify(body)).length;
+      if(bytes>32*1024*1024) throw new Error('Gemini request exceeds the 32 MiB localhost relay limit. Use fewer or smaller reference images.');
+    }
   }else{
     const request=compatibleImageRequest(body,base,p);
     endpoint=request.endpoint;body=request.body;
@@ -6386,13 +6511,19 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     recordImageRoute({...route,references:usedRefs},'blocked');
     throw new Error(tt('img.resolutionMismatch',{resolution,width:actualWidth,height:actualHeight}));
   }
+  let visibleCharacters=null;
+  try{visibleCharacters=await countGeneratedImageText(exportImgSrc,imageMime);}catch{}
+  const characterHint=visibleCharacters===null
+    ?refsText('OCR 字符估算不可用','OCR character estimate unavailable')
+    :refsText(`OCR 约 ${visibleCharacters.toLocaleString()} 个非空白字符（目标 ${FIGURE_TEXT_TARGET.toLocaleString()}${visibleCharacters>FIGURE_TEXT_TARGET?'，已超出':''}）`,
+      `OCR ≈${visibleCharacters.toLocaleString()} non-whitespace characters (target ${FIGURE_TEXT_TARGET.toLocaleString()}${visibleCharacters>FIGURE_TEXT_TARGET?'; above target':''})`);
   recordImageRoute({...route,references:usedRefs},'verified');
   $('#out').style.display='block';
   $('#out').innerHTML = `<img data-step3-output="true" src="${esc(imgSrc)}" alt="draft">
     <div class="dl"><button type="button" class="btn-primary" id="dlImg">${tt('img.download')}</button>
     <button type="button" class="btn-ghost" id="regenerateDraft">${refsText('不满意，重新生成草稿','Regenerate draft')}</button>
     <button type="button" class="btn-primary" id="continueToStep4">${refsText('满意，进入第 4 步','Looks good — continue to Step 4')}</button>
-    <span class="hint">${r.referenceFallback?tt('img.referenceFallback'):usedRefs?tt('img.hintRef',{n:useIds.length}):tt('img.hint')} · ${ratio} · ${actualWidth}×${actualHeight}px · ${esc(model)}${attempted.length>1?' · 已切换已验证备用线路':''}</span></div>`;
+    <span class="hint">${r.referenceFallback?tt('img.referenceFallback'):usedRefs?tt('img.hintRef',{n:useIds.length}):tt('img.hint')} · ${ratio} · ${actualWidth}×${actualHeight}px · ${esc(model)} · ${esc(characterHint)}${attempted.length>1?' · 已切换已验证备用线路':''}</span></div>`;
   // Bind the bitmap download as soon as Step 3 has its verified image. Step 4
   // can take minutes and must never gate or replace this button.
   $('#dlImg').onclick = async ()=>{

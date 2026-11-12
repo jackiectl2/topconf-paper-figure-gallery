@@ -130,6 +130,17 @@ export function geminiImageRequest(base, model, prompt, references=[], options={
     }}};
 }
 
+export async function countGeminiImageRequest(origin,model,body,key,{fetchImpl=fetch}={}){
+  const response=await fetchImpl(origin+'/api/gemini-count',{
+    method:'POST',headers:{'Content-Type':'application/json','x-gemini-api-key':key,'x-gemini-model':model},
+    body:JSON.stringify({contents:body.contents})
+  });
+  if(!response.ok) throw new Error('Gemini input-token count failed (HTTP '+response.status+').');
+  const value=(await response.json()).totalTokens;
+  if(!Number.isSafeInteger(value)||value<0) throw new Error('Gemini input-token count was invalid.');
+  return value;
+}
+
 export function geminiImageResult(data, {requestId='',locale='en'}={}){
   const candidates=Array.isArray(data?.candidates)?data.candidates:[];
   const partsOf=candidate=>Array.isArray(candidate?.content?.parts)?candidate.content.parts:[];

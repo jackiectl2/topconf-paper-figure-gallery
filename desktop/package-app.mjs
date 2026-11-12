@@ -21,9 +21,10 @@ for(const path of tracked){
   mkdirSync(resolve(to,'..'),{recursive:true});
   try{linkSync(from,to);}catch{copyFileSync(from,to);}
 }
-for(const name of ['main.mjs','server.mjs'])copyFileSync(join(desktopRoot,name),join(stage,name));
+mkdirSync(join(stage,'desktop'),{recursive:true});
+for(const name of ['main.mjs','server.mjs'])copyFileSync(join(desktopRoot,name),join(stage,'desktop',name));
 const {name,version,type,main}=JSON.parse(readFileSync(join(desktopRoot,'package.json'),'utf8'));
-writeFileSync(join(stage,'package.json'),JSON.stringify({name,version,type,main}));
+writeFileSync(join(stage,'package.json'),JSON.stringify({name,version,type,main:join('desktop',main)}));
 rmSync(out,{recursive:true,force:true});
 mkdirSync(out,{recursive:true});
 const appPaths=await packager({dir:stage,out,name:'FigureForgeTest',platform:'darwin',arch:'arm64',electronVersion:'45.3.0',asar:false,overwrite:true,prune:true,appVersion:version,executableName:'FigureForgeTest',appBundleId:'com.figureforge.test'});

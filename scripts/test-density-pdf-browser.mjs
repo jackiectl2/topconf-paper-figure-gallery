@@ -30,6 +30,7 @@ try{
   });
   await page.goto(origin+'/forge/',{waitUntil:'domcontentloaded'});
   await page.locator('#provider').selectOption('oai');
+  await page.locator('#keySource').selectOption('manual');
   await page.locator('#key').fill('fake-test-key');
   await page.waitForFunction(()=>[...document.querySelector('#parseModel').options].some(x=>x.value==='gpt-6.1-sol'));
   await page.locator('#parseModel').selectOption('gpt-6.1-sol');

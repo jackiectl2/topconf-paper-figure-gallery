@@ -66,6 +66,7 @@ data/user_report.bin
 
 # local-only working notes and one-off ops/debug scripts (not part of the public repo)
 _local/
+ai_keys.env
 desktop/node_modules/
 /HANDOFF.md
 /docs/PROMOTION.md

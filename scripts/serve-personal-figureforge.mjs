@@ -1,14 +1,15 @@
 import http from 'node:http';
 import {createReadStream, existsSync, statSync} from 'node:fs';
-import {resolve, extname, sep} from 'node:path';
+import {resolve, extname, sep, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {countFigureText} from '../forge/figure-text-ocr.mjs';
+import {readLocalKey,LocalKeyError} from './local-keys.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const mime = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.json':'application/json','.css':'text/css','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml','.gif':'image/gif','.wasm':'application/wasm','.onnx':'application/octet-stream','.bin':'application/octet-stream'};
 const allowedModels = new Set(['gemini-3.1-flash-image','gemini-3-pro-image']);
 
-export function createPersonalServer({fetchImpl=fetch,ocrImpl=countFigureText}={}) {
+export function createPersonalServer({fetchImpl=fetch,ocrImpl=countFigureText,keyFile=join(root,'_local','ai_keys.env')}={}) {
   return http.createServer(async (req,res) => {
     res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('X-Content-Type-Options','nosniff');
@@ -17,6 +18,21 @@ export function createPersonalServer({fetchImpl=fetch,ocrImpl=countFigureText}={
     if (req.headers.host !== `127.0.0.1:${req.socket.localPort}`) { res.writeHead(403).end(); return; }
     let url;
     try { url = new URL(req.url, local); } catch { res.writeHead(400).end(); return; }
+    if(url.pathname==='/api/local-key'){
+      if(req.method!=='POST'||req.headers.origin!==local){res.writeHead(403).end();return;}
+      let size=0;const chunks=[];
+      try{
+        for await(const chunk of req){size+=chunk.length;if(size>1024)throw new LocalKeyError(413,'Request too large.');chunks.push(chunk);}
+        const {provider}=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        const key=readLocalKey(keyFile,provider);
+        res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({key}));
+      }catch(error){
+        const status=error instanceof LocalKeyError?error.status:400;
+        const message=error instanceof LocalKeyError?error.message:'Invalid local key request.';
+        res.writeHead(status,{'Content-Type':'application/json'}).end(JSON.stringify({error:{message}}));
+      }
+      return;
+    }
     if(url.pathname==='/api/figure-text-count'){
       if(req.method!=='POST'||req.headers.origin!==local){res.writeHead(403).end();return;}
       let size=0;const chunks=[];

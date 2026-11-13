@@ -1,5 +1,18 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createPersonalServer} from './serve-personal-figureforge.mjs';
+
+function zipEntry(zip,name){
+  for(let pos=0;pos<zip.length-30;){
+    if(zip.readUInt32LE(pos)!==0x04034b50)break;
+    const size=zip.readUInt32LE(pos+18),nameSize=zip.readUInt16LE(pos+26),extraSize=zip.readUInt16LE(pos+28);
+    const entryName=zip.subarray(pos+30,pos+30+nameSize).toString();
+    const start=pos+30+nameSize+extraSize;
+    if(entryName===name)return zip.subarray(start,start+size);
+    pos=start+size;
+  }
+  throw new Error('Missing ZIP entry: '+name);
+}
 
 const {chromium}=await import('../_local/test/node_modules/playwright-core/index.mjs');
 let imageBase64='';
@@ -53,6 +66,7 @@ try{
     return canvas.toDataURL('image/png').split(',')[1];
   });
   await page.locator('#provider').selectOption('oai');
+  await page.locator('#keySource').selectOption('manual');
   await page.locator('#key').fill('mock-openai-key');
   const normalized=await page.evaluate(()=>['parse','visual','recon'].map(scope=>window.__normalizeRequest({model:'gpt-6.1-sol',max_tokens:5000,temperature:0.1,messages:[]},scope)));
   for(const body of normalized){assert.equal(body.max_completion_tokens,5000);assert.equal('max_tokens' in body,false);assert.equal('temperature' in body,false);}
@@ -65,6 +79,7 @@ try{
   assert.equal(unsupported,true);
   await page.locator('#modeTabs button[data-mode="image"]').click();
   await page.locator('#imageProvider').selectOption('gemini');
+  await page.locator('#geminiKeySource').selectOption('manual');
   await page.locator('#geminiKey').fill('mock-gemini-key');
   await page.locator('#imageResolution').selectOption('1K');
   await page.locator('#paper').fill('A method with input, encoder, memory, decoder and evaluation stages.');
@@ -144,8 +159,8 @@ try{
   await page.locator('#genBtn').click();
   await page.waitForFunction(()=>document.querySelector('#out img[data-step3-output="true"]') && !document.querySelector('#genBtn').disabled);
   assert.equal((await page.evaluate(()=>window.__selectedRefs())).length,10);
-  assert.equal(geminiCalls[2].body.contents[0].parts.filter(x=>x.inlineData).length,6);
-  assert.equal(await page.locator('#sentRefsPreview img').count(),6);
+  assert.equal(geminiCalls[2].body.contents[0].parts.filter(x=>x.inlineData).length,3);
+  assert.equal(await page.locator('#sentRefsPreview img').count(),3);
   assert.match(await page.locator('#sentRefsSummary').textContent(),/not run/);
   svgDraft=true;
   await page.locator('#modeTabs button[data-mode="svg"]').click();
@@ -157,6 +172,15 @@ try{
   assert.match(JSON.stringify(chatBodies.at(-1)),/Never add a figure-wide title banner or standalone title row/);
   assert.equal(await page.evaluate(()=>window.__ffExportState.reviewPending),true);
   assert.equal(await page.locator('#exportConfirm').isDisabled(),true);
+  const svgDownloadPromise=page.waitForEvent('download');
+  await page.locator('#dlSvg').click();
+  const svgDownload=await svgDownloadPromise;
+  const svgZip=readFileSync(await svgDownload.path());
+  const svgRecord=JSON.parse(zipEntry(svgZip,'references.json').toString());
+  assert.equal(svgRecord.outputKind,'step3-svg');
+  assert.equal(svgRecord.selectedReferenceIds.length,10);
+  assert.equal(svgRecord.generationReferenceIds.length,3);
+  assert.match(zipEntry(svgZip,svgRecord.outputFile).toString(),/<svg/);
   const beforeSvgContinue=chatBodies.length;
   await page.locator('#continueToStep4').click();
   assert.equal(await page.evaluate(()=>window.__ffExportState.reviewPending),false);
@@ -164,6 +188,28 @@ try{
   assert.equal((await page.evaluate(()=>window.__ffExportState.scene.nodes.find(n=>n.type==='text')?.fontFamily)).replaceAll('"',''),'Comic Sans MS');
   assert.equal(await page.locator('#exportConfirm').isEnabled(),true);
   assert.equal(chatBodies.length,beforeSvgContinue,'SVG continuation must not call another model');
+  const exportPromise=page.waitForEvent('download');
+  await page.locator('#exportConfirm').click();
+  const exported=await exportPromise;
+  const exportZip=readFileSync(await exported.path());
+  const exportRecord=JSON.parse(zipEntry(exportZip,'references.json').toString());
+  assert.equal(exportRecord.outputKind,'step4-svg');
+  assert.equal(exportRecord.draftId,svgRecord.draftId);
+  assert.deepEqual(exportRecord.selectedReferenceIds,svgRecord.selectedReferenceIds);
+  assert.match(zipEntry(exportZip,exportRecord.outputFile).toString(),/<svg/);
+  for(const format of ['drawio','pptx','vsdx']){
+    await page.locator(`#exportActions [data-export="${format}"]`).click();
+    const promise=page.waitForEvent('download');
+    await page.locator('#exportConfirm').click();
+    const file=await promise;
+    const bytes=readFileSync(await file.path());
+    const record=JSON.parse(zipEntry(bytes,'references.json').toString());
+    assert.equal(record.outputKind,'step4-'+format);
+    assert.equal(record.draftId,svgRecord.draftId);
+    const output=zipEntry(bytes,record.outputFile);
+    if(format==='drawio')assert.match(output.toString(),/<mxfile/);
+    else assert.equal(output.readUInt32LE(0),0x04034b50);
+  }
   const overlongSvg=await page.evaluate(()=>{
     window.__ffRenderSVG(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><text x="20" y="40">${'A'.repeat(1301)}</text></svg>`,false,[],false);
     return document.querySelector('#out .hint').textContent;

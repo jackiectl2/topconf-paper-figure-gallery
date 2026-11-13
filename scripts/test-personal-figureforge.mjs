@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {ReferenceSampler} from '../forge/private-reference-sampler.mjs';
+import {mkdtempSync,writeFileSync,chmodSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {ReferenceSampler,sampleGenerationReferences} from '../forge/private-reference-sampler.mjs';
 import {normalizeOpenAIChat} from '../forge/openai-parameters.mjs';
 import {createPersonalServer} from './serve-personal-figureforge.mjs';
 
@@ -12,8 +15,25 @@ test('private references rotate through the full collection before repeats',()=>
   const crossing=sampler.draw(4);
   assert.equal(new Set(crossing).size,4);
   assert.equal(new Set([...first,...crossing]).size,42);
-  assert.throws(()=>sampler.draw(3),/4–10/);
-  assert.throws(()=>sampler.draw(11),/4–10/);
+  assert.throws(()=>sampler.draw(0),/1–10/);
+  assert.throws(()=>sampler.draw(11),/1–10/);
+});
+
+test('one to ten references can be drawn, and generation sees at most three',()=>{
+  const ids=Array.from({length:42},(_,i)=>`item-${i}`);
+  const sampler=new ReferenceSampler(ids,()=>0.25);
+  assert.equal(sampler.draw(1).length,1);
+  assert.equal(new Set(sampler.draw(10)).size,10);
+  for(const n of [1,2,3,4,10]){
+    const selected=ids.slice(0,n);
+    const sent=sampleGenerationReferences(selected,()=>0.25);
+    assert.equal(sent.length,Math.min(n,3));
+    assert.equal(new Set(sent).size,sent.length);
+    assert.ok(sent.every(id=>selected.includes(id)));
+    if(n<=3)assert.deepEqual(sent,selected);
+  }
+  assert.throws(()=>sampler.draw(0),/1–10/);
+  assert.throws(()=>sampler.draw(11),/1–10/);
 });
 
 test('OpenAI default and explicit reasoning use compatible chat fields',()=>{
@@ -65,4 +85,31 @@ test('localhost Gemini relay uses native API, never bearer authorization or logg
     assert.equal((await fetch(origin+'/api/figure-text-count',{method:'POST',headers:{Origin:'https://other.example'},body:'{}'})).status,403);
     assert.equal(calls.length,3);
   }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
+test('local key endpoint reads only the matching fake key with same-origin protection',async()=>{
+  const folder=mkdtempSync(join(tmpdir(),'figureforge-local-keys-'));
+  const keyFile=join(folder,'ai_keys.env');
+  writeFileSync(keyFile,'OPENAI_API_KEY=mock-openai-secret\nGEMINI_API_KEY=mock-gemini-secret\n',{mode:0o600});
+  const server=createPersonalServer({keyFile});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const origin=`http://127.0.0.1:${server.address().port}`;
+  const request=(provider,headers={})=>fetch(origin+'/api/local-key',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...headers},body:JSON.stringify({provider})});
+  try{
+    const openai=await request('openai');
+    assert.equal(openai.status,200);
+    assert.deepEqual(await openai.json(),{key:'mock-openai-secret'});
+    assert.equal(openai.headers.get('cache-control'),'no-store');
+    assert.deepEqual(await (await request('gemini')).json(),{key:'mock-gemini-secret'});
+    assert.equal((await request('openai',{Origin:'https://other.example'})).status,403);
+    assert.equal((await request('infistar')).status,400);
+    assert.equal((await fetch(origin+'/_local/ai_keys.env')).status,404);
+    chmodSync(keyFile,0o644);
+    assert.equal((await request('openai')).status,403);
+    chmodSync(keyFile,0o600);
+    writeFileSync(keyFile,'OPENAI_API_KEY=bad key\n',{mode:0o600});
+    assert.equal((await request('openai')).status,422);
+    rmSync(keyFile);
+    assert.equal((await request('openai')).status,404);
+  }finally{await new Promise(resolve=>server.close(resolve));rmSync(folder,{recursive:true,force:true});}
 });

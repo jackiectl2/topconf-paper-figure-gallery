@@ -30,9 +30,11 @@ try{
     return canvas.toDataURL('image/png').split(',')[1];
   });
   await page.locator('#provider').selectOption('oai');
+  await page.locator('#keySource').selectOption('manual');
   await page.locator('#key').fill('fake-openai-key');
   await page.locator('#modeTabs button[data-mode="image"]').click();
   await page.locator('#imageProvider').selectOption('gemini');
+  await page.locator('#geminiKeySource').selectOption('manual');
   await page.locator('#geminiKey').fill('fake-gemini-key');
   await page.locator('#model').selectOption('gemini-3-pro-image');
   await page.locator('#imageResolution').selectOption('1K');

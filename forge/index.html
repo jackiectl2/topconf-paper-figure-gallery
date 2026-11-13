@@ -357,10 +357,22 @@
     .export-progress-fill{height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#6366f1,#4f46e5);transition:width .16s ease}
     @media(max-width:760px){.export-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* Keep model and canvas controls visually consistent. */
-#parseReasoningEffort,#visualReasoningEffort,#reconReasoningEffort,#reconModel,#figureRatio,#imageResolution,#analyzeModel,#imageProvider,#privateRefCount{border:1px solid #d9d5ed;border-radius:10px;padding:10px 14px;background:#fff;color:#1f2937;min-height:42px;box-shadow:0 1px 2px #312e8108}
+#parseReasoningEffort,#visualReasoningEffort,#reconReasoningEffort,#reconModel,#figureRatio,#imageResolution,#analyzeModel,#imageProvider,#privateRefCount,#keySource,#geminiKeySource{border:1px solid #d9d5ed;border-radius:10px;padding:10px 14px;background:#fff;color:#1f2937;min-height:42px;box-shadow:0 1px 2px #312e8108}
 #figureRatio,#imageResolution{min-width:110px}
 #analyzeModel{flex:1;max-width:none;min-width:0}
 #figureRatio:focus-visible,#imageResolution:focus-visible,#analyzeModel:focus-visible,#reconModel:focus-visible,#reconReasoningEffort:focus-visible{outline:3px solid #c4b5fd;outline-offset:2px;border-color:#7c3aed}
+.private-picker{width:min(1000px,96vw);max-height:88vh;padding:20px;border:1px solid #c7d2fe;border-radius:16px;box-shadow:0 24px 70px #11182744}
+.private-picker::backdrop{background:#111827aa}
+.private-picker-head,.private-picker-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.private-picker-head h3{margin:0;color:#312e81}.private-picker-head button{font-size:23px;background:transparent;border:0;cursor:pointer}
+.private-picker-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;max-height:58vh;overflow:auto;padding:4px;margin:12px 0}
+.private-picker-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;border:2px solid #e5e7eb;border-radius:10px;background:#fff;padding:6px;cursor:pointer;color:#1f2937}
+.private-picker-item[aria-pressed="true"]{border-color:#4f46e5;background:#eef2ff}
+.private-picker-item:focus-visible{outline:3px solid #a5b4fc;outline-offset:2px}
+.private-picker-item img{width:100%;height:112px;object-fit:contain;background:#f8fafc}
+.private-picker-item .check{position:absolute;top:8px;right:8px;background:#fff;border:1px solid #a5b4fc;border-radius:5px;padding:1px 5px}
+.private-picker-actions{border-top:1px solid #e5e7eb;padding-top:12px}
+@media(max-width:700px){.private-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
   <script defer src="../assets/analytics.js?v=20261102"></script>
 </head>
@@ -434,9 +446,11 @@
           <p class="bnote infistar-signup" id="infistarSignup"><a href="https://www.infistar.cc/register?aff=RZ4MDTRU&amp;ref_source=link" target="_blank" rel="noopener noreferrer sponsored" data-i18n="infistar.signup"></a></p>
           <div class="bfield">
             <span class="blab">API Key</span>
+            <select id="keySource" aria-label="OpenAI API Key source"><option value="default">Default (local file)</option><option value="manual">Manual</option></select>
             <input type="password" id="key" autocomplete="off" spellcheck="false" data-i18n-ph="keyPh">
             <button class="btn-ghost btn-sm" id="refreshModels" data-i18n="refresh"></button>
           </div>
+          <p class="bnote" id="keySourceStatus" role="status" hidden></p>
           <div class="bfield">
             <span class="blab" data-i18n="parsemodel"></span>
             <select id="parseModel"></select>
@@ -550,7 +564,7 @@
         <h4><span class="bi" aria-hidden="true">🖼️</span><span data-i18n="box.refs"></span></h4>
         <div class="refs-tools"><span id="refsSummary" aria-live="polite"></span><button type="button" class="btn-primary" id="refsUploadBtn"></button><button type="button" class="btn-ghost" id="refsClearBtn" hidden></button></div>
       </div>
-      <div class="bfield" style="margin-bottom:9px"><label class="blab" for="privateRefCount" id="privateRefCountLabel">每个候选自动抽取</label><select id="privateRefCount"><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select><button type="button" class="btn-ghost btn-sm" id="refsAutoBtn">恢复自动抽取</button></div>
+      <div class="bfield" style="margin-bottom:9px"><label class="blab" for="privateRefCount" id="privateRefCountLabel">每次参考图数量</label><select id="privateRefCount"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select><button type="button" class="btn-primary btn-sm" id="refsPickPrivateBtn">预览并自选 42 张图</button><button type="button" class="btn-ghost btn-sm" id="refsAutoBtn">恢复自动抽取</button></div>
       <p class="bnote" id="privateRefStatus" role="status">正在检查本机私有收藏…</p>
       <input type="file" id="refsUpload" accept="image/png,image/jpeg,image/webp" multiple hidden>
       <p class="hint" id="refsUploadHelp" style="margin:0 0 12px"></p>
@@ -576,7 +590,8 @@
       <h4><span class="bi" aria-hidden="true">🎨</span><span data-i18n="box.model"></span><small id="generationBadge" data-i18n="settings.badge"></small></h4>
       <div class="srow" style="margin-top:0"><div class="tabs" id="modeTabs"><button data-mode="svg" class="on" data-i18n="mode.svg"></button><button data-mode="image" data-i18n="mode.image"></button></div></div>
       <div class="bfield" id="imageProviderRow" hidden style="margin-top:9px"><label class="blab" for="imageProvider" id="imageProviderLabel">位图生成服务商</label><select id="imageProvider"><option value="step1">沿用步骤一</option><option value="gemini">Gemini 原生 API</option></select></div>
-      <div class="bfield" id="geminiKeyRow" hidden style="margin-top:9px"><label class="blab" for="geminiKey">Gemini API Key</label><input type="password" id="geminiKey" autocomplete="off" spellcheck="false"></div>
+      <div class="bfield" id="geminiKeyRow" hidden style="margin-top:9px"><label class="blab" for="geminiKey">Gemini API Key</label><select id="geminiKeySource" aria-label="Gemini API Key source"><option value="default">Default (local file)</option><option value="manual">Manual</option></select><input type="password" id="geminiKey" autocomplete="off" spellcheck="false"></div>
+      <p class="bnote" id="geminiKeySourceStatus" role="status" hidden></p>
       <p class="bnote" id="imageProviderNote" hidden></p>
       <div class="bfield" id="modelRow" style="margin-top:11px"><span class="blab" id="modelLabel" data-i18n="modelLabel"></span><select id="model"></select></div>
       <div class="bfield" id="imageDimensionsRow" hidden style="margin-top:9px"><span class="blab" data-i18n="img.ratio"></span><select id="figureRatio"><option value="16:9" selected>16:9</option><option value="3:2">3:2</option><option value="4:3">4:3</option><option value="1:1">1:1</option></select><span class="blab" data-i18n="img.resolution"></span><select id="imageResolution"><option value="1K">1K</option><option value="2K" selected>2K</option><option value="4K">4K</option></select></div>
@@ -597,6 +612,15 @@
     <div id="out"></div>
   </div>
 
+
+  <dialog id="privatePicker" class="private-picker" aria-labelledby="privatePickerTitle">
+    <div class="private-picker-head"><h3 id="privatePickerTitle">Choose private references</h3><button type="button" id="privatePickerClose" aria-label="Close">×</button></div>
+    <p class="bnote" id="privatePickerHelp"></p>
+    <label for="privatePickerType" id="privatePickerTypeLabel">Type</label>
+    <select id="privatePickerType"><option value="all">All 42</option><option value="ref">ref</option><option value="test">test</option></select>
+    <div id="privatePickerGrid" class="private-picker-grid" role="group" aria-label="Private reference images"></div>
+    <div class="private-picker-actions"><span id="privatePickerProgress" role="status" aria-live="polite"></span><div class="row"><button type="button" class="btn-ghost" id="privatePickerCancel">Cancel</button><button type="button" class="btn-primary" id="privatePickerConfirm" disabled>Confirm selection</button></div></div>
+  </dialog>
 
   <div class="card" id="card4">
     <div class="step"><span class="num">4</span><span data-i18n="s4"></span>
@@ -713,7 +737,7 @@ import {fetchReconstructionStream,usesReconstructionStream} from './infistar-rec
 import {prepareQuery,buildIndex,rank} from './retrieval.mjs';
 import {requestChat, pdfResponseJSON, pdfRepairBody} from './chat-api.mjs?v=20261021-unlimited';
 import {normalizeOpenAIChat} from './openai-parameters.mjs';
-import {ReferenceSampler} from './private-reference-sampler.mjs';
+import {ReferenceSampler,sampleGenerationReferences} from './private-reference-sampler.mjs';
 import {usesInfistarGemini, geminiImageRequest, geminiImageResult, compatibleImageRequest, requestImageWithRecovery, imageFailureKind, fetchBufferedWithTimeout} from './image-api.mjs?v=20261026-nonelinear-resolution';
 import {ImageRoutes, safeImageFailover} from './image-routes.mjs?v=20261020';
 const imageRoutes=new ImageRoutes();
@@ -743,9 +767,16 @@ const cleanKey = s => (s||'').replace(/\s+/g,'');
 const esc = s => (s+'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let refs = new Set(), results = [], mode = 'svg';
 let passMode = 'two'; const MAX_REFS = 10; let analysis = null;
-let privateSampler=null, manualReferenceOverride=false,privateLoadError='';
+let pendingDraftProvenance=null, currentDraftProvenance=null;
+let privateSampler=null, manualReferenceOverride=false,privateManualMode=false,privateLoadError='';
 const privateFigures=new Map();
 const providerKeys=new Map();
+const localKeySupported=['127.0.0.1','localhost'].includes(location.hostname);
+let openAIKeyLoad=0,geminiKeyLoad=0;
+for(const [id,storage] of [['keySource','ff_source_openai'],['geminiKeySource','ff_source_gemini']]){
+  const saved=localStorage.getItem(storage);
+  $('#'+id).value=localKeySupported&&saved!=='manual'?'default':'manual';
+}
 for(const key of Object.keys(localStorage)) if(key.startsWith('ff_key_')) localStorage.removeItem(key);
 async function loadPrivateReferences(){
   try{
@@ -766,7 +797,11 @@ async function loadPrivateReferences(){
   }
 }
 function drawPrivateReferences(){
-  if(manualReferenceOverride) return;
+  if(manualReferenceOverride){
+    if(privateManualMode && (refs.size!==Number($('#privateRefCount').value)||[...refs].some(id=>!privateFigures.has(id))))
+      throw new Error(refsText('自选参考图数量已变化，请重新打开预览并确认。','The manual reference count changed. Reopen the picker and confirm your selection.'));
+    return;
+  }
   if(!privateSampler) throw new Error('本机私有收藏未就绪。');
   refs=new Set(privateSampler.draw(Number($('#privateRefCount').value)));
   patchAllCards();updateCount();renderRefsStrip();
@@ -781,11 +816,24 @@ const referenceFigure = id => uploadedRefs.get(id) || privateFigures.get(id) || 
 const referenceURL = f => f.localURL || f.privateURL || '../'+f.image;
 const refsText = (zh,en) => GAL_I18N.lang==='en' ? en : zh;
 function syncPersonalLabels(){
-  $('#privateRefCountLabel').textContent=refsText('每个候选自动抽取','Auto draw per candidate');
+  $('#privateRefCountLabel').textContent=refsText('每次参考图数量（1–10）','References per draft (1–10)');
+  $('#refsPickPrivateBtn').textContent=refsText('预览并自选 42 张图','Preview and choose from 42');
   $('#refsAutoBtn').textContent=refsText('恢复自动抽取','Use automatic draw');
   $('#privateRefStatus').textContent=privateSampler
-    ? refsText('本机私有收藏已就绪：42 张；每次生成自动轮换，手选或上传可覆盖。','Local private collection ready: 42 images. Generation rotates them; manual picks or uploads override it.')
+    ? privateManualMode
+      ? refsText('已固定自选参考图；生成时不会重新抽图。','Manual private references are fixed; generation will not redraw them.')
+      : refsText('本机私有收藏已就绪：42 张；每次生成自动轮换，手选或上传可覆盖。','Local private collection ready: 42 images. Generation rotates them; manual picks or uploads override it.')
     : refsText('私有收藏不可用：'+privateLoadError+'。请用本地启动脚本并检查缓存。','Private collection unavailable: '+privateLoadError+'. Start the local server and check the cache.');
+  $('#privatePickerTitle').textContent=refsText('预览并自选私有参考图','Preview and choose private references');
+  $('#privatePickerTypeLabel').textContent=refsText('图片类型','Image type');
+  $('#privatePickerType').options[0].textContent=refsText('全部 42 张','All 42');
+  $('#privatePickerCancel').textContent=refsText('取消','Cancel');
+  $('#privatePickerConfirm').textContent=refsText('确认所选','Confirm selection');
+  $('#keySource').options[0].textContent=refsText('Default（本地文件）','Default (local file)');
+  $('#keySource').options[1].textContent=refsText('手动输入','Manual');
+  $('#geminiKeySource').options[0].textContent=$('#keySource').options[0].textContent;
+  $('#geminiKeySource').options[1].textContent=$('#keySource').options[1].textContent;
+  if($('#privatePicker').open) renderPrivatePicker();
   $('#imageProviderLabel').textContent=refsText('位图生成服务商','Bitmap provider');
   $('#imageProvider').options[0].textContent=refsText('沿用步骤一','Use Step 1 provider');
   $('#imageProvider').options[1].textContent=refsText('Gemini 原生 API','Gemini native API');
@@ -800,8 +848,58 @@ function clearReferences(){
   referenceUploadEpoch++;
   for(const id of uploadedRefs.keys()) releaseUploadedReference(id);
   manualReferenceOverride=false;
+  privateManualMode=false;
   refs.clear(); patchAllCards(); updateCount(); renderRefsStrip();
+  syncPersonalLabels();
 }
+let pendingPrivateIds=[];
+function renderPrivatePicker(){
+  const type=$('#privatePickerType').value;
+  const figures=[...privateFigures.values()].filter(f=>type==='all'||f.id.startsWith(type+'_'));
+  $('#privatePickerGrid').innerHTML=figures.map(f=>`<button type="button" class="private-picker-item" data-id="${esc(f.id)}" aria-pressed="${pendingPrivateIds.includes(f.id)}" aria-label="${esc(f.id)}"><span class="check" aria-hidden="true">${pendingPrivateIds.includes(f.id)?'✓':'□'}</span><img src="${esc(f.privateURL)}" alt="" loading="lazy"><span>${esc(f.id)}</span></button>`).join('');
+  updatePrivatePickerProgress();
+}
+function updatePrivatePickerProgress(){
+  const target=Number($('#privateRefCount').value), selected=pendingPrivateIds.length;
+  $('#privatePickerHelp').textContent=refsText(`逐张勾选 ${target} 张；方向键移动焦点，空格或回车选择。取消不会修改现有参考图。`,`Select ${target} images one by one. Use arrow keys to move and Space or Enter to toggle. Cancel keeps your current references.`);
+  $('#privatePickerProgress').textContent=refsText(`已选 ${selected} / ${target} 张${selected?'：'+pendingPrivateIds.join(', '):''}`,`Selected ${selected} / ${target}${selected?': '+pendingPrivateIds.join(', '):''}`);
+  $('#privatePickerConfirm').disabled=selected!==target;
+}
+function openPrivatePicker(){
+  if(!privateSampler){showErr(refsText('本机私有收藏未就绪。','The local private collection is not ready.'));return;}
+  pendingPrivateIds=privateManualMode?[...refs].filter(id=>privateFigures.has(id)):[];
+  $('#privatePickerType').value='all';
+  renderPrivatePicker();
+  $('#privatePicker').showModal();
+  $('#privatePickerGrid button')?.focus();
+}
+$('#refsPickPrivateBtn').onclick=openPrivatePicker;
+$('#privateRefCount').onchange=()=>{if(privateManualMode)openPrivatePicker();else if($('#privatePicker').open)updatePrivatePickerProgress();};
+$('#privatePickerType').onchange=()=>{renderPrivatePicker();$('#privatePickerGrid button')?.focus();};
+$('#privatePickerGrid').onclick=e=>{
+  const button=e.target.closest('button[data-id]');if(!button)return;
+  const id=button.dataset.id,index=pendingPrivateIds.indexOf(id);
+  if(index>=0)pendingPrivateIds.splice(index,1);
+  else if(pendingPrivateIds.length<Number($('#privateRefCount').value))pendingPrivateIds.push(id);
+  button.setAttribute('aria-pressed',String(pendingPrivateIds.includes(id)));
+  button.querySelector('.check').textContent=pendingPrivateIds.includes(id)?'✓':'□';
+  updatePrivatePickerProgress();
+};
+$('#privatePickerGrid').onkeydown=e=>{
+  if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;
+  const buttons=[...$('#privatePickerGrid').querySelectorAll('button[data-id]')],index=buttons.indexOf(document.activeElement);
+  if(index<0)return;
+  const columns=getComputedStyle($('#privatePickerGrid')).gridTemplateColumns.split(' ').length;
+  const delta={ArrowLeft:-1,ArrowRight:1,ArrowUp:-columns,ArrowDown:columns}[e.key];
+  buttons[Math.max(0,Math.min(buttons.length-1,index+delta))]?.focus();e.preventDefault();
+};
+$('#privatePickerClose').onclick=$('#privatePickerCancel').onclick=()=>$('#privatePicker').close();
+$('#privatePickerConfirm').onclick=()=>{
+  if(pendingPrivateIds.length!==Number($('#privateRefCount').value))return;
+  clearReferences();
+  refs=new Set(pendingPrivateIds);manualReferenceOverride=true;privateManualMode=true;
+  $('#privatePicker').close();patchAllCards();updateCount();renderRefsStrip();syncPersonalLabels();
+};
 $('#refsUploadBtn').onclick=()=>$('#refsUpload').click();
 $('#refsClearBtn').onclick=clearReferences;
 $('#refsUpload').onchange=async e=>{
@@ -809,6 +907,7 @@ $('#refsUpload').onchange=async e=>{
   if(!files.length) return;
   if(!manualReferenceOverride && [...refs].some(id=>privateFigures.has(id))){refs.clear();updateCount();renderRefsStrip();}
   manualReferenceOverride=true;
+  privateManualMode=false;
   const errors=[], epoch=referenceUploadEpoch; $('#refsUploadBtn').disabled=true;
   try{
     for(const file of files){
@@ -1155,6 +1254,7 @@ $('#grid').addEventListener('click', e=>{
   const id = card.dataset.id;
   if(!manualReferenceOverride && [...refs].some(ref=>privateFigures.has(ref))) refs.clear();
   manualReferenceOverride=true;
+  privateManualMode=false;
   if(refs.has(id)) refs.delete(id);
   else { if(refs.size>=MAX_REFS){ showErr(tt('err.maxrefs',{m:MAX_REFS})); return;} refs.add(id); }
   patchCard(card, id); updateCount(); renderRefsStrip();
@@ -1904,6 +2004,7 @@ function restoreProviderState(p){
   $('#reconReasoningEffort').value=['','medium','high','xhigh'].includes(reconEffort)?reconEffort:(p==='infistar'?'high':'');
   $('#infistarSignup').hidden = p!=='infistar';
   $('#key').value = providerKeys.get(p)||'';
+  syncOpenAIKeySourceUI();
   $('#baseOverride').value = localStorage.getItem('ff_base_'+p)||'';
   $('#customModel').value = localStorage.getItem('ff_cmodel_'+p)||'';
   $('#parseCustomModel').value = localStorage.getItem('ff_parse_cmodel_'+p)||'';
@@ -1923,10 +2024,78 @@ function restoreProviderState(p){
 $('#provider').onchange = async e=>{
   localStorage.setItem('ff_provider', e.target.value);
   restoreProviderState(e.target.value);
+  await applyOpenAIKeySource();
   await Promise.all([populateModels(),populateParserModels()]);
   syncImageProviderUI();
 };
 $('#key').oninput = e=>{ e.target.value=cleanKey(e.target.value); providerKeys.set($('#provider').value,e.target.value);syncImageProviderUI(); };
+async function fetchConfiguredLocalKey(provider){
+  const response=await fetch('/api/local-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider}),cache:'no-store'});
+  if(!response.ok)throw new Error(String(response.status));
+  const key=cleanKey((await response.json()).key);
+  if(!key)throw new Error('missing');
+  return key;
+}
+function syncOpenAIKeySourceUI(){
+  const shown=localKeySupported&&$('#provider').value==='oai';
+  $('#keySource').hidden=!shown;
+  $('#key').readOnly=shown&&$('#keySource').value==='default';
+  if(!shown)$('#keySourceStatus').hidden=true;
+}
+async function applyOpenAIKeySource(){
+  const epoch=++openAIKeyLoad;
+  syncOpenAIKeySourceUI();
+  if(!localKeySupported||$('#provider').value!=='oai'||$('#keySource').value!=='default')return;
+  $('#key').value='';providerKeys.set('oai','');
+  const status=$('#keySourceStatus');status.hidden=false;
+  status.textContent=refsText('正在读取本机 OpenAI Key…','Reading local OpenAI key…');
+  try{
+    const key=await fetchConfiguredLocalKey('openai');
+    if(epoch!==openAIKeyLoad||$('#provider').value!=='oai'||$('#keySource').value!=='default')return;
+    $('#key').value=key;providerKeys.set('oai',key);
+    status.textContent=refsText('已从本机 ai_keys.env 读取 OpenAI Key。','OpenAI key loaded from local ai_keys.env.');
+  }catch(error){
+    if(epoch!==openAIKeyLoad||$('#provider').value!=='oai'||$('#keySource').value!=='default')return;
+    status.textContent=error.message==='403'
+      ?refsText('ai_keys.env 权限需设为 600；也可切换手动输入。','Set ai_keys.env permissions to 600, or choose Manual.')
+      :refsText('本机 OpenAI Key 不可用；可配置 _local/ai_keys.env 或切换手动输入。','Local OpenAI key unavailable. Configure _local/ai_keys.env or choose Manual.');
+  }
+  syncImageProviderUI();
+}
+$('#keySource').onchange=async e=>{
+  localStorage.setItem('ff_source_openai',e.target.value);
+  if(e.target.value==='manual'){
+    ++openAIKeyLoad;$('#key').readOnly=false;$('#keySourceStatus').hidden=true;$('#key').focus();
+  }else await applyOpenAIKeySource();
+  await Promise.all([populateModels(),populateParserModels()]);
+};
+async function applyGeminiKeySource(){
+  const epoch=++geminiKeyLoad;
+  const active=localKeySupported&&mode==='image'&&$('#imageProvider').value==='gemini';
+  $('#geminiKeySource').hidden=!localKeySupported;
+  $('#geminiKey').readOnly=active&&$('#geminiKeySource').value==='default';
+  const status=$('#geminiKeySourceStatus');status.hidden=!active||$('#geminiKeySource').value!=='default';
+  if(!active||$('#geminiKeySource').value!=='default')return;
+  $('#geminiKey').value='';
+  status.textContent=refsText('正在读取本机 Gemini Key…','Reading local Gemini key…');
+  try{
+    const key=await fetchConfiguredLocalKey('gemini');
+    if(epoch!==geminiKeyLoad||mode!=='image'||$('#imageProvider').value!=='gemini'||$('#geminiKeySource').value!=='default')return;
+    $('#geminiKey').value=key;
+    status.textContent=refsText('已从本机 ai_keys.env 读取 Gemini Key。','Gemini key loaded from local ai_keys.env.');
+  }catch(error){
+    if(epoch!==geminiKeyLoad||mode!=='image'||$('#imageProvider').value!=='gemini'||$('#geminiKeySource').value!=='default')return;
+    status.textContent=error.message==='403'
+      ?refsText('ai_keys.env 权限需设为 600；也可切换手动输入。','Set ai_keys.env permissions to 600, or choose Manual.')
+      :refsText('本机 Gemini Key 不可用；可配置 _local/ai_keys.env 或切换手动输入。','Local Gemini key unavailable. Configure _local/ai_keys.env or choose Manual.');
+  }
+}
+$('#geminiKeySource').onchange=async e=>{
+  localStorage.setItem('ff_source_gemini',e.target.value);
+  if(e.target.value==='manual'){
+    ++geminiKeyLoad;$('#geminiKey').readOnly=false;$('#geminiKeySourceStatus').hidden=true;$('#geminiKey').focus();
+  }else await applyGeminiKeySource();
+};
   $('#baseOverride').oninput = e=>{ localStorage.setItem('ff_base_'+$('#provider').value, e.target.value); syncRelayPreset(); syncBaseHint(); };
 $('#customModel').oninput = e=>localStorage.setItem('ff_cmodel_'+$('#provider').value, e.target.value);
 $('#parseModel').onchange = e=>localStorage.setItem('ff_parse_model_'+$('#provider').value,e.target.value);
@@ -1959,6 +2128,7 @@ document.querySelectorAll('#modeTabs button').forEach(b=>b.onclick=async ()=>{
   b.classList.add('on'); mode=b.dataset.mode;
   $('#imageDimensionsRow').hidden=mode!=='image';
   syncImageProviderUI();
+  if(mode==='image'&&$('#imageProvider').value==='gemini')await applyGeminiKeySource();
   syncImageRatioSupport();
   $('#modelLabel').textContent = mode==='svg' ? tt('modelLabel.svg') : tt('modelLabel.image');
   await populateModels();
@@ -1968,6 +2138,7 @@ function syncImageProviderUI(){
   const image=mode==='image',gemini=image&&$('#imageProvider').value==='gemini';
   $('#imageProviderRow').hidden=!image;
   $('#geminiKeyRow').hidden=!gemini;
+  $('#geminiKeySourceStatus').hidden=!gemini||$('#geminiKeySource').value!=='default';
   $('#imageProviderNote').hidden=!image&&$('#imageProvider').value!=='gemini';
   $('#imageProviderNote').textContent=!image&&$('#imageProvider').value==='gemini'
     ?refsText('SVG 草稿不支持 Gemini 生图模型，当前改用步骤一的服务商。','SVG drafting cannot use a Gemini image model; it uses the Step 1 provider.')
@@ -1984,7 +2155,7 @@ function syncImageProviderUI(){
     ?refsText('两阶段分析需要步骤一的 Key 和支持看图的视觉模型；当前组合尚未就绪。','Two-stage analysis needs a Step 1 key and a vision model that accepts images. The current combination is not ready.')
     :'';
 }
-$('#imageProvider').onchange=async()=>{syncImageProviderUI();await populateModels();syncImageProviderUI();};
+$('#imageProvider').onchange=async()=>{syncImageProviderUI();if($('#imageProvider').value==='gemini')await applyGeminiKeySource();await populateModels();syncImageProviderUI();};
 $('#geminiKey').oninput=e=>{e.target.value=cleanKey(e.target.value);};
 function syncPassUI(){
   $('#analyzeModelRow').hidden = mode!=='image';
@@ -1995,7 +2166,8 @@ document.querySelectorAll('#passTabs button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#passTabs button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on'); passMode=b.dataset.pass;
   syncPassUI();
-  if(passMode==='two' && refs.size && refs.size<4) showErr(tt('pass.warn1'));
+  // One to three references can still be analyzed; the prompt describes the
+  // available evidence without claiming a cross-figure consensus.
   // No upper-bound warning for direct mode: it used to complain above 6 references, but
   // sending the model more original figures is useful — the images carry detail that a
   // written summary cannot, so a higher count is not a problem to warn about.
@@ -2045,12 +2217,12 @@ function recordImageRoute(route,state){
 
 /* ---------------- pass 1: analyze references ---------------- */
 const FIGURE_FONT = 'Comic Sans MS';
-const ANALYZE_SYS = 'You are an expert scientific-figure design analyst. You receive several top-conference figures of the SAME target visual type. Infer the shared visual grammar across all supplied figures: recurring panel divisions, density, element counts, borders, arrows, palette, typography and hierarchy. Do not treat any single figure as a layout master and do not copy a particular figure. Return STRICT JSON only, with every generated string in English.';
+const ANALYZE_SYS = 'You are an expert scientific-figure design analyst. You receive one or more top-conference figures of the target visual type. Describe the observed visual grammar: panel divisions, density, element counts, borders, arrows, palette, typography and hierarchy. With multiple figures, infer recurring patterns without treating one as a layout master; with one figure, describe only what is visible. Return STRICT JSON only, with every generated string in English.';
 const RECON_SYS = 'You are a meticulous scientific-figure vectorization service. Reconstruct the supplied figure as a complete editable scene, preserving every visible primitive and its geometry. Return STRICT JSON only, never markdown or commentary. Never replace the scene with one full-canvas bitmap; split panels, borders, arrows, text, icons, charts and image regions into separate nodes.';
 function buildAnalyzePrompt(n, idList){
   const ids = (idList||[]).join(', ');
-  return `Here are ${n} top-conference paper figures, all of the target visual type for the figure I want to design.
-Analyze the COMMON VISUAL GRAMMAR across all supplied images and return one JSON object with EXACTLY these keys:
+  return `Here ${n===1?'is one top-conference paper figure':'are '+n+' top-conference paper figures'} of the target visual type for the figure I want to design.
+${n===1?'Describe the visible layout and style without claiming a cross-figure consensus.':'Analyze the common visual grammar across all supplied images.'} Return one JSON object with EXACTLY these keys:
 {"density":{"containers":0,"modulesPerPanel":0,"solidBorders":0,"dashedBorders":0,"connectors":0,"boxFillPercent":0,
             "nesting":"the levels, e.g. panel > 6 module boxes > each holds an icon or mini chart",
             "variety":"the kinds of visual modules present and how neighbouring modules differ",
@@ -2065,12 +2237,12 @@ Analyze the COMMON VISUAL GRAMMAR across all supplied images and return one JSON
  "styleFingerprint":{"background":"surface treatment","panelShape":"corner radius and container treatment","moduleShape":"module box treatment","iconStyle":"icon/illustration language","arrowStyle":"arrow and connector language","textTreatment":"panel header and label treatment"},
  "elements":"recurring visual elements: box styles, arrow types, icon/illustration conventions",
  "hierarchy":"information hierarchy: what is emphasised and how",
- "representative":["ids of the 2-4 figures that best represent the shared composition and richest detail; select them by commonality, not upload order"],
+ "representative":["ids of up to 4 supplied figures that best represent the observed composition and richest detail; include the only figure when n=1"],
  "imageRefIds":["ids of 1-3 figures that are the strongest visual anchors for a bitmap model"],
  "refinedPrompt":"a detailed self-contained English description of what is drawn: each panel and its contents, the module blocks and their connections, arrow directions and flow, the visual levels, and the icon or illustration style"}
 Rules: output JSON only, no markdown or commentary. Write every generated string in English; translate any text visible in the reference figures rather than copying non-English labels.
 Ignore any overall figure title, title banner, or separate title row in the references. Do not include it in panels, layoutBlueprint, typography, or refinedPrompt; use only the actual diagram panels and their compact headings.
-Infer the shared grammar from all figures; do not average them into a bland layout, but do not copy any one composition. The output must be a fresh paper-specific composition that mirrors the recurring density and element vocabulary.
+${n===1?'Describe the observed grammar of the single figure; do not invent a cross-figure consensus or copy its composition.':'Infer the shared grammar from all figures; do not average them into a bland layout, but do not copy any one composition.'} The output must be a fresh paper-specific composition that mirrors the observed density and element vocabulary.
 panels: 3-5 entries whenever the references support that density. x/y/w/h are integers in a 1600x900 coordinate space with the origin at the top-left; they must not overlap and must stay inside 1600x900. Preserve recurring relative arrangements and reading directions while allowing a new composition.
 layoutBlueprint: derive 6-16 concrete zones, grouping frames or module slots from the recurring patterns across the figures. Coordinates are integers in the same 1600x900 space. Preserve common nesting and connector routes, while allowing new content and arrangement. Every zone should contain a meaningful image, formula, chart, matrix, icon or other visual module; avoid conspicuous empty boxes. moduleCount is the number of distinct visual modules in that zone; occupancy is the approximate percent of its area occupied by meaningful content; moduleKinds names the visible kinds (icon, chart, matrix, photo, formula, flow strip, table, diagram fragment, etc.).
 palette: every value MUST be a real #rrggbb hex string.
@@ -2091,7 +2263,7 @@ density: COUNT what you actually see, as integers. Use the median only for genui
     or a result thumbnail. The generator uses this list as its vocabulary.
   fill  one sentence on how FULL the boxes are in these figures — how much of a typical box is
     occupied by its element — so fullness is matched without resorting to copies.
-representative: use the figure ids EXACTLY as listed below, 2-4 of them, no indices. Select figures that best expose the shared grammar and complementary details, regardless of upload order.
+representative: use the figure ids EXACTLY as listed below, up to 4 of them and no more than the supplied count, no indices. Select figures that best expose the observed grammar and complementary details, regardless of upload order.
 imageRefIds: choose 1-3 figures that collectively show the shared panel, palette and element language; do not force the first supplied id and do not select a visually incompatible outlier.
 Available figure ids: ${ids}
 topology, styleFingerprint and refinedPrompt must describe visible layout and styling, not the paper's scientific claims. refinedPrompt should be 120-180 concrete English words about panels, arrows, palette, spacing, hierarchy and illustration language. It is used as a visual guide, not as a request to copy reference labels. Keep the prose compact so the whole JSON answer fits in one response.`;
@@ -2669,20 +2841,22 @@ $('#genBtn').onclick = async ()=>{
     const relay = relayBase();
     const useAnthropic = c.proto==='anthropic' && !relay;
     if(passMode==='two'){
-      if(refs.size<4){ showErr(tt('gen.twofew',{n:refs.size})); return; }
       $('#stepper').hidden=false; $('#analyzeBox').innerHTML='';
       setStep(1,'active'); btn.textContent=tt('gen.analyzing',{n:refs.size});
       const a = await analyzeReferences();
       analysisIds=[...refs];
-      refIds = mode==='image' ? (a.imageRefIds||a.repIds).slice(0,3) : a.repIds;
       // SVG receives the measured contract; bitmap generation receives a dense prose guide
-      // plus only the strongest visual anchors, so incompatible references are not averaged.
+      // while generation uses a random subset from the user's full selection.
       layoutGuide = (mode==='svg') ? a.refinedPrompt : (a.refinedPromptImage || a.refinedPrompt);
       setStep(1,'done'); setStep(2,'active'); btn.textContent=tt('gen.generating');
     }else{
       $('#stepper').hidden=true; btn.textContent=tt('gen.working');
     }
+    refIds=sampleGenerationReferences([...refs]);
     renderReferenceUse(analysisIds,refIds);
+    pendingDraftProvenance={version:1,draftId:crypto.randomUUID(),createdAt:new Date().toISOString(),
+      source:'FigureForge Step 3',draftFormat:mode,model,
+      selectedReferenceIds:[...refs],analysisReferenceIds:analysisIds,generationReferenceIds:refIds};
     if(mode==='svg'){
       try{ globalThis.GalleryAnalytics?.generation(mode); }catch{} // analytics: isolated task start
       if(useAnthropic) await genAnthropicSVG(base,model,key,content,refIds,layoutGuide);
@@ -2692,9 +2866,11 @@ $('#genBtn').onclick = async ()=>{
       try{ globalThis.GalleryAnalytics?.generation(mode); }catch{} // analytics: isolated task start
       await genOaiImage(base,model,imageKey,content,nativeGeminiImage?'gemini':p,refIds,layoutGuide);
     }
+    currentDraftProvenance=pendingDraftProvenance;
+    ensureExportState().provenance=currentDraftProvenance;
     if(passMode==='two') setStep(2,'done');
   }catch(err){ showErr(err.message); }
-  finally{ btn.disabled=false; btn.textContent=tt('genBtn'); }
+  finally{ pendingDraftProvenance=null; btn.disabled=false; btn.textContent=tt('genBtn'); }
 };
 
 async function genOaiSVG(base,model,key,content,p,refIds,layoutGuide){
@@ -4357,6 +4533,20 @@ function zipStore(files){
   return new Blob(chunks.concat(central, [end]), { type:'application/vnd.ms-visio.drawing' });
 }
 
+/* Keep provenance beside the exported artifact in one download. A browser cannot
+   reveal the destination folder, so the archive travels with the file instead. */
+async function referenceDownloadBundle(filename,data,provenance,kind){
+  const record=provenance || {version:1,draftId:crypto.randomUUID(),source:'external upload or preview',
+    selectedReferenceIds:[],analysisReferenceIds:[],generationReferenceIds:[]};
+  const manifest={...record,exportedAt:new Date().toISOString(),outputKind:kind,outputFile:filename};
+  const bytes=data instanceof Blob?new Uint8Array(await data.arrayBuffer())
+    :data instanceof Uint8Array?data:new TextEncoder().encode(String(data));
+  const archive=new Blob([zipStore([{name:filename,data:bytes},
+    {name:'references.json',data:JSON.stringify(manifest,null,2)+'\n'}])],{type:'application/zip'});
+  const stem=filename.replace(/\.[^.]+$/,'');
+  return {name:stem+'.zip',archive};
+}
+
 /* ---------- text-free base -> editable scene ----------
    The image model is asked to draw the figure with empty label areas, because a
    model that paints letters as pictures is what produces garbled labels. Here the
@@ -4756,7 +4946,7 @@ async function reconArchiveStore(mode,operation){
 }
 function persistReconArchive(update={}){
   const archive=window.__ffReconArchive||(window.__ffReconArchive={version:3,id:Date.now()+'-'+crypto.randomUUID(),startedAt:new Date().toISOString(),responses:[]});
-  Object.assign(archive,update,{responses:window.__ffReconResponses||[],updatedAt:new Date().toISOString()});
+  Object.assign(archive,update,{responses:window.__ffReconResponses||[],provenance:ensureExportState().provenance||null,updatedAt:new Date().toISOString()});
   // Snapshot now: queued writes must never pick up another run's responses.
   const snapshot=JSON.parse(safeArchiveJSON(archive));
   reconArchiveQueue=reconArchiveQueue.then(async()=>{
@@ -6027,25 +6217,24 @@ function initEditableExport(){
       { at:0.88, label:'· ' + tt('export.stage.pack') },
     ];
     try{
-      let dlName = (st.source==='bitmap'&&st.recon?.qualityState!=='succeeded'?'figure-forge-draft-unverified.':'figure-forge-editable.') + (target==='drawio' ? 'drawio' : target);
+      const draftId=st.provenance?.draftId||'external';
+      let dlName = `figure-forge-${draftId}-`+(st.source==='bitmap'&&st.recon?.qualityState!=='succeeded'?'draft-unverified.':'editable.') + (target==='drawio' ? 'drawio' : target);
       let dlData = null, dlMime = '';
       if(target==='svg'){
         dlData = st.svg; dlMime = 'image/svg+xml;charset=utf-8';
-        downloadText(dlName, st.svg, dlMime);
       } else if(target==='drawio'){
         dlData = sceneToDrawio(scene); dlMime = 'application/xml;charset=utf-8';
-        downloadText(dlName, dlData, dlMime);
       } else if(target==='pptx'){
         dlData = await buildNativePptx(scene, zipStore); dlMime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-        downloadBlob(dlName, dlData);
       } else if(target==='vsdx'){
         dlData = zipStore(sceneToVsdxFiles(scene, fontChoice)); dlMime = 'application/vnd.ms-visio.drawing';
-        downloadBlob(dlName, dlData);
       }
+      const bundle=await referenceDownloadBundle(dlName,dlData,st.provenance,'step4-'+target);
+      downloadBlob(bundle.name,bundle.archive);
       setExportProgress(status, 100);
       // also offered as a link, so the result is visible even if the automatic
       // download was blocked or dropped
-      offerDownload(status, dlName, dlData, dlMime);
+      offerDownload(status, bundle.name, bundle.archive, 'application/zip');
       setExportStatus(status, exportText('export.finished',{format:target==='drawio'?'draw.io':target.toUpperCase()}));
     }catch(err){
       console.warn('editable export failed');
@@ -6089,6 +6278,7 @@ $('#exportBitmapUpload')?.addEventListener('change', async function(){
     if(ensureExportState().reconPending) throw new Error(tt('export.uploadBusy'));
     uploadedExportBitmap=data;
     window.__ffReconResponses=[];
+    ensureExportState().provenance=null;
     showEditableExportStep({svg:'',source:'bitmap',bitmap:data,reconFailed:false,reconError:''});
     ensureExportState().reconError='';
     $('#reconStatus').textContent='';
@@ -6108,6 +6298,7 @@ $('#exportUseGenerated')?.addEventListener('click', function(){
   if(!src) return;
   uploadedExportBitmap='';
   window.__ffReconResponses=[];
+  ensureExportState().provenance=currentDraftProvenance;
   showEditableExportStep({svg:'',source:'bitmap',bitmap:src,reconFailed:false,reconError:''});
   ensureExportState().reconError='';
   $('#reconStatus').textContent='';
@@ -6128,11 +6319,19 @@ restoreLatestReconArchive();
 $('#downloadReconResponse')?.addEventListener('click', async function(){
   await reconArchiveQueue;
   const archive=window.__ffReconArchive||window.__ffLatestReconArchive;
-  if(archive?.responses?.length)downloadText('figure-forge-reconstruction-response.json',safeArchiveJSON(archive,2),'application/json;charset=utf-8');
+  if(archive?.responses?.length){
+    const draft=archive.provenance||ensureExportState().provenance;
+    const bundle=await referenceDownloadBundle(`figure-forge-${draft?.draftId||'external'}-reconstruction-response.json`,safeArchiveJSON(archive,2),draft,'step4-reconstruction-record');
+    downloadBlob(bundle.name,bundle.archive);
+  }
 });
-$('#downloadWholeImage')?.addEventListener('click',()=>{
+$('#downloadWholeImage')?.addEventListener('click',async()=>{
   const result=ensureExportState().wholeImageResult;
-  if(result)downloadText('figure-forge-whole-image-validation.json',JSON.stringify({version:1,...result},null,2),'application/json;charset=utf-8');
+  if(result){
+    const draft=ensureExportState().provenance;
+    const bundle=await referenceDownloadBundle(`figure-forge-${draft?.draftId||'external'}-whole-image-validation.json`,JSON.stringify({version:1,...result},null,2),draft,'step4-validation-record');
+    downloadBlob(bundle.name,bundle.archive);
+  }
 });
 $('#stopReconBtn')?.addEventListener('click',()=>reconstructionController?.abort());
 $('#refineReconBtn')?.addEventListener('click',async()=>{
@@ -6177,20 +6376,30 @@ function svgPreviewDocument(svg){
 
 function renderSVG(svg, usedVision, useIds, truncated, auditRes){
   svg=svgWithFigureFont(svg);
+  if(pendingDraftProvenance){
+    pendingDraftProvenance.generationReferenceIds=usedVision?[...(useIds||[])]:[];
+    renderReferenceUse(pendingDraftProvenance.analysisReferenceIds,pendingDraftProvenance.generationReferenceIds);
+  }
   const count=auditRes?.audit?.stats?.visibleCharacters??auditGeometry(svg).stats.visibleCharacters;
-  const blob = new Blob([svg],{type:'image/svg+xml'});
-  const url = URL.createObjectURL(blob);
   const n = (useIds||[...refs]).length;
   const auditNote = auditRes ? auditSummaryText(auditRes) : '';
   $('#out').style.display='block';
   $('#out').innerHTML = `<iframe sandbox title="SVG preview"></iframe>
-    <div class="dl"><a class="btn-primary" href="${url}" download="figure-forge-draft.svg">${tt('svg.download')}</a>
+    <div class="dl"><button type="button" class="btn-primary" id="dlSvg">${tt('svg.download')}</button>
     <button type="button" class="btn-ghost" id="regenerateDraft">${refsText('不满意，重新生成草稿','Regenerate draft')}</button>
     <button type="button" class="btn-primary" id="continueToStep4">${refsText('满意，进入第 4 步','Looks good — continue to Step 4')}</button>
     <span class="hint">${usedVision?tt('svg.hint1',{n:n}):tt('svg.hint2')}${truncated?tt('svg.trunc'):''}${auditNote} · ${count.toLocaleString()} ${refsText('个非空白字符','non-whitespace characters')} (${refsText('目标','target')} ${FIGURE_TEXT_TARGET.toLocaleString()}${count>FIGURE_TEXT_TARGET?refsText('，已超出','; above target'):''})</span></div>`;
   const frame=$('#out iframe');
   if(frame) frame.srcdoc=svgPreviewDocument(svg);
   holdStep3Draft('svg');
+  $('#dlSvg').onclick=async()=>{
+    try{
+      const draft=pendingDraftProvenance||currentDraftProvenance;
+      const filename=`figure-forge-${draft?.draftId||'preview'}-draft.svg`;
+      const bundle=await referenceDownloadBundle(filename,svg,draft,'step3-svg');
+      downloadBlob(bundle.name,bundle.archive);
+    }catch(error){showErr(error.message);}
+  };
   $('#regenerateDraft').onclick=()=>{if(!$('#genBtn').disabled)$('#genBtn').click();};
   $('#continueToStep4').onclick=()=>showEditableExportStep(svg);
 }
@@ -6282,7 +6491,7 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
   let useIds = refIds||[...refs];
   if(p==='glm' && useIds.length) throw new Error('当前 GLM 位图接口未接入参考图输入，请换用支持参考图的生图模型。');
   const maxImages=p==='gemini'?(model==='gemini-3-pro-image'?6:10):p==='sf'?1:10;
-  if(useIds.length>maxImages) useIds=useIds.slice(0,maxImages);
+  if(useIds.length>maxImages) throw new Error(`This image model accepts at most ${maxImages} reference image${maxImages===1?'':'s'}; choose fewer references or a different model.`);
   renderReferenceUse(passMode==='two'?[...refs]:[],useIds);
   const ratio=$('#figureRatio').value, resolution=$('#imageResolution').value;
   const requested={base,model,key,p,ratio,resolution,references:useIds.length>0};
@@ -6463,6 +6672,10 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
     throw new Error(tt('img.connection')+apiContext());
   }
   usedRefs=r.usedReferences;
+  if(pendingDraftProvenance){
+    pendingDraftProvenance.generationReferenceIds=usedRefs?[...useIds]:[];
+    renderReferenceUse(pendingDraftProvenance.analysisReferenceIds,pendingDraftProvenance.generationReferenceIds);
+  }
   const txt=r.text;
   if(!r.ok){
     if(safeImageFailover(r.status,txt)){
@@ -6532,8 +6745,11 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
       if(!response.ok) throw new Error('Image download failed');
       const blob=await response.blob();
       const ext=blob.type.includes('webp')?'webp':/jpe?g/.test(blob.type)?'jpg':'png';
-      downloadBlob('figure-forge-draft.'+ext,blob);
-    }catch(e){ window.open(exportImgSrc,'_blank'); }
+      const draft=currentDraftProvenance;
+      const filename=`figure-forge-${draft?.draftId||'preview'}-draft.${ext}`;
+      const bundle=await referenceDownloadBundle(filename,blob,draft,'step3-bitmap');
+      downloadBlob(bundle.name,bundle.archive);
+    }catch(e){ showErr(e.message); }
   };
   markStep3Output(exportImgSrc);
   holdStep3Draft('bitmap');
@@ -6580,6 +6796,7 @@ onBootState(bootStatus);
 await loadManifest();
 initProviders();
 syncSubCount();
+await applyOpenAIKeySource();
 const startupModels=Promise.all([populateModels(), populateParserModels()]);
 await boot();
 await startupModels;

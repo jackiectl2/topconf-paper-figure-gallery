@@ -55,11 +55,7 @@ try{
       const body=route.request().postDataJSON();chatBodies.push(body);
       if(svgDraft) return route.fulfill({json:{choices:[{finish_reason:'stop',message:{content:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><rect id="background" data-role="background" data-editable="true" x="0" y="0" width="1600" height="900" fill="#ffffff"/><text id="title" data-role="label" data-editable="true" x="80" y="80" font-size="32">Demo</text></svg>'}}]}});
       const ids=await page.evaluate(()=>window.__selectedRefs());
-      const forbidden='Multi-Frequency Augmentation';
-      const answer={representative:ids.slice(0,4),imageRefIds:ids.slice(0,3),refinedPrompt:`Draw ${forbidden}`,
-        layout:`three panels of ${forbidden}`,elements:forbidden,hierarchy:forbidden,
-        panels:[{name:forbidden,role:forbidden,x:0,y:0,w:800,h:900}],
-        layoutBlueprint:[{id:forbidden,role:forbidden,x:0,y:0,w:400,h:450,moduleCount:3,occupancy:75,moduleKinds:['chart',forbidden]}]};
+      const answer={representative:ids.slice(0,4),imageRefIds:ids.slice(0,3),refinedPrompt:'Dense panels and arrows',layout:'three panels',elements:'arrows',hierarchy:'left to right'};
       return route.fulfill({json:{choices:[{finish_reason:'stop',message:{content:JSON.stringify(answer)}}]}});
     }
     if(url.pathname.endsWith('/images/edits')||url.pathname.endsWith('/images/generations')){
@@ -143,7 +139,6 @@ try{
   assert.match(JSON.stringify(geminiCalls[0].body),/every visible word in the finished figure must be English/);
   assert.match(JSON.stringify(geminiCalls[0].body),/Do not add any figure-wide title banner or standalone title row/);
   assert.match(JSON.stringify(geminiCalls[0].body),/restrained cartoon illustration style/);
-  assert.doesNotMatch(JSON.stringify(geminiCalls[0].body),/Multi-Frequency Augmentation/);
   const disclosure=await page.locator('#sentRefsSummary').textContent();
   for(const id of selected) assert.ok(disclosure.includes(id));
   assert.equal(await page.locator('#sentRefsPreview img').count(),3);

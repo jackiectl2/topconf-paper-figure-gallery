@@ -738,7 +738,6 @@ import {prepareQuery,buildIndex,rank} from './retrieval.mjs';
 import {requestChat, pdfResponseJSON, pdfRepairBody} from './chat-api.mjs?v=20261021-unlimited';
 import {normalizeOpenAIChat} from './openai-parameters.mjs';
 import {ReferenceSampler,sampleGenerationReferences} from './private-reference-sampler.mjs';
-import {sanitizeReferenceAnalysis} from './reference-visual-guide.mjs';
 import {usesInfistarGemini, geminiImageRequest, geminiImageResult, compatibleImageRequest, requestImageWithRecovery, imageFailureKind, fetchBufferedWithTimeout} from './image-api.mjs?v=20261026-nonelinear-resolution';
 import {ImageRoutes, safeImageFailover} from './image-routes.mjs?v=20261020';
 const imageRoutes=new ImageRoutes();
@@ -2220,7 +2219,7 @@ function recordImageRoute(route,state){
 
 /* ---------------- pass 1: analyze references ---------------- */
 const FIGURE_FONT = 'Comic Sans MS';
-const ANALYZE_SYS = 'You are an expert scientific-figure design analyst. You receive one or more top-conference figures of the target visual type. Describe only transferable visual grammar: panel geometry, density, element types, borders, arrows, palette, typography and hierarchy. Never use reference-paper titles, panel labels, method names, variables or scientific claims as design instructions. With multiple figures, infer recurring patterns without treating one as a layout master; with one figure, describe only what is visible. Return STRICT JSON only, with every generated string in English.';
+const ANALYZE_SYS = 'You are an expert scientific-figure design analyst. You receive one or more top-conference figures of the target visual type. Describe the observed visual grammar: panel divisions, density, element counts, borders, arrows, palette, typography and hierarchy. With multiple figures, infer recurring patterns without treating one as a layout master; with one figure, describe only what is visible. Return STRICT JSON only, with every generated string in English.';
 const RECON_SYS = 'You are a meticulous scientific-figure vectorization service. Reconstruct the supplied figure as a complete editable scene, preserving every visible primitive and its geometry. Return STRICT JSON only, never markdown or commentary. Never replace the scene with one full-canvas bitmap; split panels, borders, arrows, text, icons, charts and image regions into separate nodes.';
 function buildAnalyzePrompt(n, idList){
   const ids = (idList||[]).join(', ');
@@ -2234,17 +2233,16 @@ ${n===1?'Describe the visible layout and style without claiming a cross-figure c
  "typography":{"panelHeader":0,"label":0,"note":0},
  "palette":{"background":"#hex","primary":"#hex","accent":"#hex","neutral":"#hex","others":["#hex"]},
  "layout":"how the canvas is divided (number/arrangement of panels) and reading direction",
- "panels":[{"name":"generic positional label such as Panel A","role":"visual function, never reference-paper subject matter","x":0,"y":0,"w":0,"h":0}],
- "layoutBlueprint":[{"id":"zone-1","role":"generic visual element types, never reference-paper subject matter","x":0,"y":0,"w":0,"h":0,"moduleCount":0,"occupancy":0,"moduleKinds":["icon","chart"],"nesting":"local nesting","flow":"local reading direction"}],
+ "panels":[{"name":"panel name","role":"what this panel shows","x":0,"y":0,"w":0,"h":0}],
+ "layoutBlueprint":[{"id":"zone-1","role":"what this concrete zone or slot contains","x":0,"y":0,"w":0,"h":0,"moduleCount":0,"occupancy":0,"moduleKinds":["icon","chart"],"nesting":"local nesting","flow":"local reading direction"}],
  "topology":{"anchor":"the recurring composition grammar shared by the figures","zones":"relative columns/rows and nesting that recur","flow":"reading direction and connector routes","spacing":"gaps, margins and whitespace rhythm"},
  "styleFingerprint":{"background":"surface treatment","panelShape":"corner radius and container treatment","moduleShape":"module box treatment","iconStyle":"icon/illustration language","arrowStyle":"arrow and connector language","textTreatment":"panel header and label treatment"},
  "elements":"recurring visual elements: box styles, arrow types, icon/illustration conventions",
  "hierarchy":"information hierarchy: what is emphasised and how",
  "representative":["ids of up to 4 supplied figures that best represent the observed composition and richest detail; include the only figure when n=1"],
  "imageRefIds":["ids of 1-3 figures that are the strongest visual anchors for a bitmap model"],
- "refinedPrompt":"a detailed English description of transferable visual layout and styling only, without source-paper names, claims or labels"}
-Rules: output JSON only, no markdown or commentary. Write every generated string in English. Ignore labels in every language.
-Treat all visible words in the reference images as forbidden source content. Never transcribe them into panel names, zone roles, refinedPrompt or any other field. Describe module types such as chart, matrix and icon instead.
+ "refinedPrompt":"a detailed self-contained English description of what is drawn: each panel and its contents, the module blocks and their connections, arrow directions and flow, the visual levels, and the icon or illustration style"}
+Rules: output JSON only, no markdown or commentary. Write every generated string in English; translate any text visible in the reference figures rather than copying non-English labels.
 Ignore any overall figure title, title banner, or separate title row in the references. Do not include it in panels, layoutBlueprint, typography, or refinedPrompt; use only the actual diagram panels and their compact headings.
 ${n===1?'Describe the observed grammar of the single figure; do not invent a cross-figure consensus or copy its composition.':'Infer the shared grammar from all figures; do not average them into a bland layout, but do not copy any one composition.'} The output must be a fresh paper-specific composition that mirrors the observed density and element vocabulary.
 panels: 3-5 entries whenever the references support that density. x/y/w/h are integers in a 1600x900 coordinate space with the origin at the top-left; they must not overlap and must stay inside 1600x900. Preserve recurring relative arrangements and reading directions while allowing a new composition.
@@ -2389,8 +2387,8 @@ async function analyzeReferences(){
     if(d.choices?.[0]?.finish_reason==='length') throw new Error(tt('err.analyze3'));
     txt=d.choices?.[0]?.message?.content||'';
   }
-  const raw=omitGlobalTitle(extractJSON(txt));
-  if(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(JSON.stringify(raw)))
+  const j=omitGlobalTitle(extractJSON(txt));
+  if(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(JSON.stringify(j)))
     throw new Error('Reference analysis returned non-English text. Please generate again.');
   // Representative figures may come back as ids (preferred, unambiguous) or as
   // 1-based indices (older models). Accept either, but only ids that really exist
@@ -2402,13 +2400,12 @@ async function analyzeReferences(){
     const n=+s;
     return Number.isInteger(n)&&n>=1&&n<=validIds.length ? validIds[n-1] : null;
   };
-  let reps=(Array.isArray(raw.representative)?raw.representative:[]).map(resolveRefId).filter(Boolean);
+  let reps=(Array.isArray(j.representative)?j.representative:[]).map(resolveRefId).filter(Boolean);
   reps=[...new Set(reps)].slice(0,4);
   if(reps.length<2) reps=[...new Set(validIds)].slice(0,4);
-  let imageRefIds=(Array.isArray(raw.imageRefIds)?raw.imageRefIds:[]).map(resolveRefId).filter(Boolean);
+  let imageRefIds=(Array.isArray(j.imageRefIds)?j.imageRefIds:[]).map(resolveRefId).filter(Boolean);
   imageRefIds=[...new Set(imageRefIds)].slice(0,3);
   if(!imageRefIds.length) imageRefIds=reps.slice(0,3);
-  const j=sanitizeReferenceAnalysis(raw);
   // Kept for backwards-compatible UI metadata only; it is never used as a
   // composition authority or forced into the selected reference set.
   j.primaryId=reps[0] || validIds[0] || null;
@@ -2637,8 +2634,6 @@ function generationIntent(content){
 }
 const FIGURE_TEXT_TARGET=1300;
 const FIGURE_TEXT_RULE='Aim for about 1,300 visible non-whitespace characters or fewer in the finished figure, counting panel headings, labels, legends, numbers and punctuation. Prefer short labels, variables and visual icons to prose, while keeping the method complete.';
-const REFERENCE_CONTENT_RULE='Reference images supply visual style and geometry only. Ignore every reference-image word, title, panel name, method label, variable, chart value and scientific claim. Derive all subject matter, stage names, variables and labels exclusively from the paper content below; if a reference subject differs from this paper, replace it completely.';
-const REFERENCE_CONTENT_RULE_SHORT='References provide style only. All method content and labels must come from this paper.';
 const FIGURE_CARTOON_RULE='Use a restrained cartoon illustration style across the figure with warm flat colours and expressive, simple icons; a small friendly character is optional only where it clarifies a method step. Keep characters secondary and preserve square rectangular modules, even spacing, straight arrows and the reference-derived panel layout.';
 const METHOD_ONLY_FINAL_RULE='Final method-only rule: Ignore any source request to draw Results, benchmarks, measured gains, validation badges or evaluation panels; retain method quantities and stop at the method output.';
 function visibleCharacterCount(text){return Array.from(String(text||'').replace(/\s/gu,'')).length;}
@@ -2657,7 +2652,6 @@ ${content}
 
 ${refLines}
 
-${REFERENCE_CONTENT_RULE}
 Produce one complete editable SVG with viewBox="0 0 1600 900", a horizontal canvas, and a white background. Treat the shared topology, proportions, module density, palette, line styles, spacing, and reading direction in the design contract as the highest-priority visual guide. Do not copy a reference's exact content or entire composition. Use axis-aligned, square-corner rectangular modules, even spacing and straight arrow segments. Align boxes, arrows, and labels. Make panel borders visibly thicker than internal module borders; use dashed frames for optional, conceptual, or repeated groups. Do not use lorem ipsum or placeholder numbers.
 Do not add any figure-wide title banner or standalone title row, even if a reference has one. Begin with the actual diagram panels; use only compact panel headings where needed. ${FIGURE_CARTOON_RULE}
 If the design contract gives panel coordinates or font sizes, use those values directly. Fill each defined module region with meaningful content: flows, network diagrams, tables, small charts, thumbnails, icons, legends, or short labels. Preserve intentional margins and group spacing while avoiding large empty blocks. Reuse repeated styles with <defs> where appropriate, and finish the SVG with </svg>.
@@ -6597,8 +6591,8 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
       : '');
   // Keep the selected intent outside style compression, including custom text.
   const intent=budget.unit==='tokens'
-    ? `Figure language requirement: every visible word in the finished figure must be English. Use Comic Sans MS. Do not add any figure-wide title banner or standalone title row. ${FIGURE_CARTOON_RULE} ${FIGURE_TEXT_RULE} ${REFERENCE_CONTENT_RULE_SHORT}\n`+generationIntent(content)+'\n'
-    : `Figure language requirement: every visible word in the finished figure must be English, including panel headings, module labels, axes, legends and annotations. Translate Chinese paper terms into concise English; do not draw Chinese characters.\nTypography requirement: use Comic Sans MS for every visible panel heading, label, axis, legend and annotation. Keep text crisp and readable.\nDo not add any figure-wide title banner or standalone title row, even if a reference or the paper title suggests one. Begin with the actual diagram panels; use only compact panel headings where needed.\n${FIGURE_CARTOON_RULE}\n${FIGURE_TEXT_RULE}\n${REFERENCE_CONTENT_RULE}\n`+generationIntent(content)+'\n';
+    ? `Figure language requirement: every visible word in the finished figure must be English. Use Comic Sans MS. Do not add any figure-wide title banner or standalone title row. ${FIGURE_CARTOON_RULE} ${FIGURE_TEXT_RULE}\n`+generationIntent(content)+'\n'
+    : `Figure language requirement: every visible word in the finished figure must be English, including panel headings, module labels, axes, legends and annotations. Translate Chinese paper terms into concise English; do not draw Chinese characters.\nTypography requirement: use Comic Sans MS for every visible panel heading, label, axis, legend and annotation. Keep text crisp and readable.\nDo not add any figure-wide title banner or standalone title row, even if a reference or the paper title suggests one. Begin with the actual diagram panels; use only compact panel headings where needed.\n${FIGURE_CARTOON_RULE}\n${FIGURE_TEXT_RULE}\n`+generationIntent(content)+'\n';
   const suffix=methodOnly?'\n'+METHOD_ONLY_FINAL_RULE:'';
   const paperReserve=Math.min(imagePromptSize(content,budget),Math.floor(budget.limit*(budget.unit==='tokens'?.2:.35)));
   const paperHeader='\nPaper content (figure-critical facts first):\n';

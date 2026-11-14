@@ -90,20 +90,28 @@ test('localhost Gemini relay uses native API, never bearer authorization or logg
 test('local key endpoint reads only the matching fake key with same-origin protection',async()=>{
   const folder=mkdtempSync(join(tmpdir(),'figureforge-local-keys-'));
   const keyFile=join(folder,'ai_keys.env');
+  const sharedKeyFile=join(folder,'.ai_keys.env');
   writeFileSync(keyFile,'OPENAI_API_KEY=mock-openai-secret\nGEMINI_API_KEY=mock-gemini-secret\n',{mode:0o600});
-  const server=createPersonalServer({keyFile});
+  writeFileSync(sharedKeyFile,'export OPENAI_API_KEY="mock-shared-openai"\nexport GOOGLE_API_KEY="mock-shared-google"\nUNRELATED_SETTING=yes\n',{mode:0o600});
+  const server=createPersonalServer({keyFile,sharedKeyFile});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const origin=`http://127.0.0.1:${server.address().port}`;
   const request=(provider,headers={})=>fetch(origin+'/api/local-key',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...headers},body:JSON.stringify({provider})});
   try{
     const openai=await request('openai');
     assert.equal(openai.status,200);
-    assert.deepEqual(await openai.json(),{key:'mock-openai-secret'});
+    assert.deepEqual(await openai.json(),{key:'mock-shared-openai'});
     assert.equal(openai.headers.get('cache-control'),'no-store');
-    assert.deepEqual(await (await request('gemini')).json(),{key:'mock-gemini-secret'});
+    assert.deepEqual(await (await request('gemini')).json(),{key:'mock-shared-google'});
     assert.equal((await request('openai',{Origin:'https://other.example'})).status,403);
     assert.equal((await request('infistar')).status,400);
     assert.equal((await fetch(origin+'/_local/ai_keys.env')).status,404);
+    chmodSync(sharedKeyFile,0o644);
+    assert.equal((await request('gemini')).status,403);
+    chmodSync(sharedKeyFile,0o600);
+    rmSync(sharedKeyFile);
+    assert.deepEqual(await (await request('openai')).json(),{key:'mock-openai-secret'});
+    assert.deepEqual(await (await request('gemini')).json(),{key:'mock-gemini-secret'});
     chmodSync(keyFile,0o644);
     assert.equal((await request('openai')).status,403);
     chmodSync(keyFile,0o600);

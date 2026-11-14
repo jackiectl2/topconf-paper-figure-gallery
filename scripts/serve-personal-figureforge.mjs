@@ -1,15 +1,16 @@
 import http from 'node:http';
 import {createReadStream, existsSync, statSync} from 'node:fs';
 import {resolve, extname, sep, join} from 'node:path';
+import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {countFigureText} from '../forge/figure-text-ocr.mjs';
-import {readLocalKey,LocalKeyError} from './local-keys.mjs';
+import {readLocalKey,readSharedLocalKey,LocalKeyError} from './local-keys.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const mime = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.json':'application/json','.css':'text/css','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.svg':'image/svg+xml','.gif':'image/gif','.wasm':'application/wasm','.onnx':'application/octet-stream','.bin':'application/octet-stream'};
 const allowedModels = new Set(['gemini-3.1-flash-image','gemini-3-pro-image']);
 
-export function createPersonalServer({fetchImpl=fetch,ocrImpl=countFigureText,keyFile=join(root,'_local','ai_keys.env')}={}) {
+export function createPersonalServer({fetchImpl=fetch,ocrImpl=countFigureText,keyFile=join(root,'_local','ai_keys.env'),sharedKeyFile=join(homedir(),'.ai_keys.env')}={}) {
   return http.createServer(async (req,res) => {
     res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('X-Content-Type-Options','nosniff');
@@ -24,7 +25,9 @@ export function createPersonalServer({fetchImpl=fetch,ocrImpl=countFigureText,ke
       try{
         for await(const chunk of req){size+=chunk.length;if(size>1024)throw new LocalKeyError(413,'Request too large.');chunks.push(chunk);}
         const {provider}=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        const key=readLocalKey(keyFile,provider);
+        let key;
+        try{key=readSharedLocalKey(sharedKeyFile,provider);}
+        catch(error){if(error instanceof LocalKeyError&&error.status===404)key=readLocalKey(keyFile,provider);else throw error;}
         res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({key}));
       }catch(error){
         const status=error instanceof LocalKeyError?error.status:400;

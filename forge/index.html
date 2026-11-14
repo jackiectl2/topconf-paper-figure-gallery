@@ -2053,12 +2053,12 @@ async function applyOpenAIKeySource(){
     const key=await fetchConfiguredLocalKey('openai');
     if(epoch!==openAIKeyLoad||$('#provider').value!=='oai'||$('#keySource').value!=='default')return;
     $('#key').value=key;providerKeys.set('oai',key);
-    status.textContent=refsText('已从本机 ai_keys.env 读取 OpenAI Key。','OpenAI key loaded from local ai_keys.env.');
+    status.textContent=refsText('已从本机密钥文件读取 OpenAI Key。','OpenAI key loaded from a local key file.');
   }catch(error){
     if(epoch!==openAIKeyLoad||$('#provider').value!=='oai'||$('#keySource').value!=='default')return;
     status.textContent=error.message==='403'
       ?refsText('ai_keys.env 权限需设为 600；也可切换手动输入。','Set ai_keys.env permissions to 600, or choose Manual.')
-      :refsText('本机 OpenAI Key 不可用；可配置 _local/ai_keys.env 或切换手动输入。','Local OpenAI key unavailable. Configure _local/ai_keys.env or choose Manual.');
+      :refsText('本机 OpenAI Key 不可用；请检查 ~/.ai_keys.env 或 _local/ai_keys.env，也可切换手动输入。','Local OpenAI key unavailable. Check ~/.ai_keys.env or _local/ai_keys.env, or choose Manual.');
   }
   syncImageProviderUI();
 }
@@ -2082,12 +2082,12 @@ async function applyGeminiKeySource(){
     const key=await fetchConfiguredLocalKey('gemini');
     if(epoch!==geminiKeyLoad||mode!=='image'||$('#imageProvider').value!=='gemini'||$('#geminiKeySource').value!=='default')return;
     $('#geminiKey').value=key;
-    status.textContent=refsText('已从本机 ai_keys.env 读取 Gemini Key。','Gemini key loaded from local ai_keys.env.');
+    status.textContent=refsText('已从本机密钥文件读取 Gemini Key。','Gemini key loaded from a local key file.');
   }catch(error){
     if(epoch!==geminiKeyLoad||mode!=='image'||$('#imageProvider').value!=='gemini'||$('#geminiKeySource').value!=='default')return;
     status.textContent=error.message==='403'
       ?refsText('ai_keys.env 权限需设为 600；也可切换手动输入。','Set ai_keys.env permissions to 600, or choose Manual.')
-      :refsText('本机 Gemini Key 不可用；可配置 _local/ai_keys.env 或切换手动输入。','Local Gemini key unavailable. Configure _local/ai_keys.env or choose Manual.');
+      :refsText('本机 Gemini Key 不可用；请检查 ~/.ai_keys.env 中的 GOOGLE_API_KEY，或切换手动输入。','Local Gemini key unavailable. Check GOOGLE_API_KEY in ~/.ai_keys.env, or choose Manual.');
   }
 }
 $('#geminiKeySource').onchange=async e=>{

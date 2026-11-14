@@ -7,10 +7,11 @@ import {createPersonalServer} from './serve-personal-figureforge.mjs';
 const {chromium}=await import('../_local/test/node_modules/playwright-core/index.mjs');
 const folder=mkdtempSync(join(tmpdir(),'figureforge-picker-browser-'));
 const keyFile=join(folder,'ai_keys.env');
-writeFileSync(keyFile,'OPENAI_API_KEY=mock-openai-only\nGEMINI_API_KEY=mock-gemini-only\n',{mode:0o600});
+const sharedKeyFile=join(folder,'.ai_keys.env');
+writeFileSync(sharedKeyFile,'export OPENAI_API_KEY="mock-openai-only"\nexport GOOGLE_API_KEY="mock-gemini-only"\n',{mode:0o600});
 let imageBase64='';
 const geminiCalls=[],analysisCalls=[],errors=[],consoleMessages=[];
-const server=createPersonalServer({keyFile,ocrImpl:async()=>({characters:123}),fetchImpl:async(url,init)=>{
+const server=createPersonalServer({keyFile,sharedKeyFile,ocrImpl:async()=>({characters:123}),fetchImpl:async(url,init)=>{
   geminiCalls.push({url,headers:init.headers,body:JSON.parse(init.body.toString())});
   if(url.endsWith(':countTokens'))return new Response(JSON.stringify({totalTokens:2100}),{status:200,headers:{'Content-Type':'application/json'}});
   return new Response(JSON.stringify({candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:imageBase64}}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});
@@ -129,7 +130,7 @@ try{
   assert.ok(stored.every(([key,value])=>!value.includes('mock-openai-only')&&!value.includes('mock-gemini-only')));
   assert.deepEqual(errors,[]);
   assert.ok(consoleMessages.every(message=>!message.includes('mock-openai-only')&&!message.includes('mock-gemini-only')));
-  rmSync(keyFile);
+  rmSync(sharedKeyFile);
   await page.reload({waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>document.querySelector('#keySourceStatus')?.textContent.includes('unavailable'));
   assert.equal(await page.locator('#key').inputValue(),'');

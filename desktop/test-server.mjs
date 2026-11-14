@@ -16,8 +16,11 @@ test('desktop server serves only bundled content and private runtime images',asy
   writeFileSync(join(privateRoot,'manifest.json'),'{}');
   writeFileSync(join(privateRoot,'images','ref_1.png'),'PNG');
   writeFileSync(join(privateRoot,'special_ids.txt'),'SECRET');
+  const keyFile=join(root,'figureforge_keys.env'),sharedKeyFile=join(root,'.ai_keys.env');
+  writeFileSync(keyFile,'OPENAI_API_KEY=mock-app-openai\nGEMINI_API_KEY=mock-app-gemini\n',{mode:0o600});
+  writeFileSync(sharedKeyFile,'OPENAI_API_KEY=mock-home-openai\nGOOGLE_API_KEY=mock-home-gemini\n',{mode:0o600});
   const upstream=[];
-  const server=createDesktopServer({staticRoot,privateRoot,ocrImpl:async()=>({characters:42}),fetchImpl:async(url,init)=>{
+  const server=createDesktopServer({staticRoot,privateRoot,keyFile,sharedKeyFile,ocrImpl:async()=>({characters:42}),fetchImpl:async(url,init)=>{
     upstream.push({url,headers:init.headers,body:JSON.parse(init.body.toString())});
     return new Response(JSON.stringify({candidates:[]}),{headers:{'Content-Type':'application/json'}});
   }});
@@ -30,6 +33,15 @@ test('desktop server serves only bundled content and private runtime images',asy
     assert.equal(await (await fetch(origin+'/_local/paperbananabench/images/ref_1.png')).text(),'PNG');
     assert.equal((await fetch(origin+'/_local/paperbananabench/special_ids.txt')).status,404);
     assert.equal((await fetch(origin+'/main.mjs')).status,404);
+    assert.equal((await fetch(origin+'/figureforge_keys.env')).status,404);
+    const localKey=async(provider,headers={})=>fetch(origin+'/api/local-key',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...headers},body:JSON.stringify({provider})});
+    assert.deepEqual(await (await localKey('openai')).json(),{key:'mock-app-openai'});
+    assert.deepEqual(await (await localKey('gemini')).json(),{key:'mock-app-gemini'});
+    assert.equal((await localKey('openai',{Origin:'https://foreign.example'})).status,403);
+    assert.equal((await localKey('other')).status,400);
+    rmSync(keyFile);
+    assert.deepEqual(await (await localKey('openai')).json(),{key:'mock-home-openai'});
+    assert.deepEqual(await (await localKey('gemini')).json(),{key:'mock-home-gemini'});
     assert.equal((await fetch(origin+'/forge/%2e%2e/%2e%2e/main.mjs')).status,404);
     assert.equal((await fetch(origin+'/api/gemini-image',{method:'POST',headers:{Origin:'https://foreign.example','x-gemini-api-key':'fake','x-gemini-model':'gemini-3-pro-image'},body:'{}'})).status,403);
     const result=await fetch(origin+'/api/gemini-image',{method:'POST',headers:{Origin:origin,'x-gemini-api-key':'fake','x-gemini-model':'gemini-3-pro-image','Content-Type':'application/json'},body:'{"contents":[]}'});

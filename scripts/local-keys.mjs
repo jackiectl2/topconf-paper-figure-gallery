@@ -53,3 +53,12 @@ export function readLocalKey(keyFile,provider){
   if(!key)throw new LocalKeyError(404,'This provider has no configured local key.');
   return key;
 }
+
+export function readPreferredLocalKey({keyFile,sharedKeyFile,legacyKeyFile},provider){
+  for(const [file,reader] of [[keyFile,readLocalKey],[sharedKeyFile,readSharedLocalKey],[legacyKeyFile,readLocalKey]]){
+    if(!file)continue;
+    try{return reader(file,provider);}
+    catch(error){if(error instanceof LocalKeyError&&error.status===404)continue;throw error;}
+  }
+  throw new LocalKeyError(404,'This provider has no configured local key.');
+}

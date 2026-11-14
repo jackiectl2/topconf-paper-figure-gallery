@@ -13,7 +13,7 @@ const projectRoot=resolve(fileURLToPath(new URL('..',import.meta.url)));
 async function start(){
   const staticRoot=app.isPackaged?app.getAppPath():projectRoot;
   const privateRoot=join(app.getPath('userData'),'paperbananabench');
-  server=createDesktopServer({staticRoot,privateRoot});
+  server=createDesktopServer({staticRoot,privateRoot,keyFile:join(app.getPath('userData'),'figureforge_keys.env')});
   await new Promise((resolveListen,rejectListen)=>{
     server.once('error',rejectListen);
     server.listen(0,'127.0.0.1',resolveListen);

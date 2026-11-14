@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {createPersonalServer} from './serve-personal-figureforge.mjs';
 
 function zipEntry(zip,name){
@@ -20,7 +22,11 @@ let geminiStatus=200;
 let svgDraft=false;
 const geminiCalls=[];
 const geminiCounts=[];
-const server=createPersonalServer({ocrImpl:async()=>({characters:20}),fetchImpl:async(url,init)=>{
+const keyFolder=mkdtempSync(join(tmpdir(),'figureforge-browser-keys-'));
+const keyFile=join(keyFolder,'figureforge_keys.env');
+const sharedKeyFile=join(keyFolder,'.ai_keys.env');
+writeFileSync(keyFile,'OPENAI_API_KEY=mock-default-openai\nGEMINI_API_KEY=mock-default-gemini\n',{mode:0o600});
+const server=createPersonalServer({keyFile,sharedKeyFile,legacyKeyFile:join(keyFolder,'legacy.env'),ocrImpl:async()=>({characters:20}),fetchImpl:async(url,init)=>{
   if(url.endsWith(':countTokens')){
     geminiCounts.push({url,headers:init.headers,body:JSON.parse(init.body.toString())});
     return new Response(JSON.stringify({totalTokens:2400}),{status:200,headers:{'Content-Type':'application/json'}});
@@ -49,7 +55,11 @@ try{
       const body=route.request().postDataJSON();chatBodies.push(body);
       if(svgDraft) return route.fulfill({json:{choices:[{finish_reason:'stop',message:{content:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><rect id="background" data-role="background" data-editable="true" x="0" y="0" width="1600" height="900" fill="#ffffff"/><text id="title" data-role="label" data-editable="true" x="80" y="80" font-size="32">Demo</text></svg>'}}]}});
       const ids=await page.evaluate(()=>window.__selectedRefs());
-      const answer={representative:ids.slice(0,4),imageRefIds:ids.slice(0,3),refinedPrompt:'Dense panels and arrows',layout:'three panels',elements:'arrows',hierarchy:'left to right'};
+      const forbidden='Multi-Frequency Augmentation';
+      const answer={representative:ids.slice(0,4),imageRefIds:ids.slice(0,3),refinedPrompt:`Draw ${forbidden}`,
+        layout:`three panels of ${forbidden}`,elements:forbidden,hierarchy:forbidden,
+        panels:[{name:forbidden,role:forbidden,x:0,y:0,w:800,h:900}],
+        layoutBlueprint:[{id:forbidden,role:forbidden,x:0,y:0,w:400,h:450,moduleCount:3,occupancy:75,moduleKinds:['chart',forbidden]}]};
       return route.fulfill({json:{choices:[{finish_reason:'stop',message:{content:JSON.stringify(answer)}}]}});
     }
     if(url.pathname.endsWith('/images/edits')||url.pathname.endsWith('/images/generations')){
@@ -60,6 +70,24 @@ try{
   });
   await page.goto(origin+'/forge/',{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>document.querySelector('#privateRefStatus')?.textContent.includes('42'));
+  assert.equal(await page.locator('#target').inputValue(),'pipeline');
+  assert.equal(await page.locator('#contentMode').inputValue(),'intent');
+  assert.equal(await page.locator('#provider').inputValue(),'oai');
+  assert.equal(await page.locator('#parseModel').inputValue(),'gpt-6.1-sol');
+  assert.equal(await page.locator('#parseReasoningEffort').inputValue(),'high');
+  assert.equal(await page.locator('#privateRefCount').inputValue(),'10');
+  assert.equal(await page.locator('#passTabs button.on').getAttribute('data-pass'),'two');
+  assert.equal(await page.locator('#modeTabs button.on').getAttribute('data-mode'),'image');
+  assert.equal(await page.locator('#imageProvider').inputValue(),'gemini');
+  assert.equal(await page.locator('#model').inputValue(),'gemini-3-pro-image');
+  assert.equal(await page.locator('#imageResolution').inputValue(),'4K');
+  assert.equal(await page.locator('#figureRatio').inputValue(),'16:9');
+  assert.equal(await page.locator('#analyzeModel').inputValue(),'gpt-6.1-sol');
+  assert.equal(await page.locator('#visualReasoningEffort').inputValue(),'high');
+  assert.equal(await page.locator('#keySource').inputValue(),'default');
+  assert.equal(await page.locator('#geminiKeySource').inputValue(),'default');
+  assert.equal(await page.locator('#key').inputValue(),'mock-default-openai');
+  assert.equal(await page.locator('#geminiKey').inputValue(),'mock-default-gemini');
   imageBase64=await page.evaluate(()=>{
     const canvas=document.createElement('canvas');canvas.width=1280;canvas.height=720;
     const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,1280,720);
@@ -83,7 +111,7 @@ try{
   await page.locator('#geminiKey').fill('mock-gemini-key');
   await page.locator('#imageResolution').selectOption('1K');
   await page.locator('#paper').fill('A method with input, encoder, memory, decoder and evaluation stages.');
-  assert.equal(await page.locator('#model').inputValue(),'gemini-3.1-flash-image');
+  assert.equal(await page.locator('#model').inputValue(),'gemini-3-pro-image');
   assert.equal(await page.locator('#analyzeModel').inputValue(),'gpt-6.1-sol');
   await page.locator('#genBtn').click();
   await page.waitForSelector('#out img[data-step3-output="true"]',{timeout:45000});
@@ -97,14 +125,14 @@ try{
   assert.equal(await page.locator('#reconBtn').isEnabled(),true);
   assert.equal(chatBodies.length,1,'entering Step 4 must wait for manual reconstruction');
   const selected=await page.evaluate(()=>window.__selectedRefs());
-  assert.equal(selected.length,4);
-  assert.equal(new Set(selected).size,4);
-  assert.equal(await page.locator('#refsStrip .refmini img').count(),4);
+  assert.equal(selected.length,10);
+  assert.equal(new Set(selected).size,10);
+  assert.equal(await page.locator('#refsStrip .refmini img').count(),10);
   assert.equal(chatBodies[0].model,'gpt-6.1-sol');
   assert.equal(chatBodies[0].max_completion_tokens,16000);
   assert.equal('max_tokens' in chatBodies[0],false);
   assert.equal('temperature' in chatBodies[0],false);
-  assert.equal(chatBodies[0].messages[1].content.filter(x=>x.type==='image_url').length,4);
+  assert.equal(chatBodies[0].messages[1].content.filter(x=>x.type==='image_url').length,10);
   assert.equal(geminiCalls.length,1);
   assert.equal(geminiCounts.length,1);
   assert.deepEqual(geminiCounts[0].body.contents,geminiCalls[0].body.contents);
@@ -115,6 +143,7 @@ try{
   assert.match(JSON.stringify(geminiCalls[0].body),/every visible word in the finished figure must be English/);
   assert.match(JSON.stringify(geminiCalls[0].body),/Do not add any figure-wide title banner or standalone title row/);
   assert.match(JSON.stringify(geminiCalls[0].body),/restrained cartoon illustration style/);
+  assert.doesNotMatch(JSON.stringify(geminiCalls[0].body),/Multi-Frequency Augmentation/);
   const disclosure=await page.locator('#sentRefsSummary').textContent();
   for(const id of selected) assert.ok(disclosure.includes(id));
   assert.equal(await page.locator('#sentRefsPreview img').count(),3);
@@ -130,8 +159,8 @@ try{
   assert.equal(await page.locator('#paper').inputValue(),paperBeforeRegenerate);
   assert.equal(chatBodies.length,2,'regeneration repeats reference analysis without reparsing the paper');
   const second=await page.evaluate(()=>window.__selectedRefs());
-  assert.equal(second.length,4);
-  assert.equal(new Set([...selected,...second]).size,8);
+  assert.equal(second.length,10);
+  assert.equal(new Set([...selected,...second]).size,20);
   assert.equal(openAIImages.length,1);
   assert.equal(openAIImages[0].authorization,'Bearer mock-openai-key');
   assert.match(openAIImages[0].contentType,/multipart\/form-data/);
@@ -219,4 +248,5 @@ try{
 }finally{
   await browser.close();
   await new Promise(resolve=>server.close(resolve));
+  rmSync(keyFolder,{recursive:true,force:true});
 }

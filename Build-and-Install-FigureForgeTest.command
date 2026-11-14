@@ -11,6 +11,13 @@ if [[ ! -d desktop/node_modules ]]; then
 fi
 npm --prefix desktop run package:mac
 npm --prefix desktop run cache:install
+key_source="$project_dir/_local/figureforge_keys.env"
+key_dir="$HOME/Library/Application Support/FigureForgeTest"
+if [[ -f "$key_source" ]]; then
+  mkdir -p "$key_dir"
+  chmod 700 "$key_dir"
+  install -m 600 "$key_source" "$key_dir/figureforge_keys.env"
+fi
 app_source="$project_dir/_local/desktop-build/dist/FigureForgeTest-darwin-arm64/FigureForgeTest.app"
 app_target="/Applications/FigureForgeTest.app"
 app_backup="/Applications/FigureForgeTest.previous.app"

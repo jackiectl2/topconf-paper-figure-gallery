@@ -89,35 +89,32 @@ test('localhost Gemini relay uses native API, never bearer authorization or logg
 
 test('local key endpoint reads only the matching fake key with same-origin protection',async()=>{
   const folder=mkdtempSync(join(tmpdir(),'figureforge-local-keys-'));
-  const keyFile=join(folder,'ai_keys.env');
+  const keyFile=join(folder,'figureforge_keys.env');
   const sharedKeyFile=join(folder,'.ai_keys.env');
   writeFileSync(keyFile,'OPENAI_API_KEY=mock-openai-secret\nGEMINI_API_KEY=mock-gemini-secret\n',{mode:0o600});
   writeFileSync(sharedKeyFile,'export OPENAI_API_KEY="mock-shared-openai"\nexport GOOGLE_API_KEY="mock-shared-google"\nUNRELATED_SETTING=yes\n',{mode:0o600});
-  const server=createPersonalServer({keyFile,sharedKeyFile});
+  const server=createPersonalServer({keyFile,sharedKeyFile,legacyKeyFile:join(folder,'old_ai_keys.env')});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const origin=`http://127.0.0.1:${server.address().port}`;
   const request=(provider,headers={})=>fetch(origin+'/api/local-key',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...headers},body:JSON.stringify({provider})});
   try{
     const openai=await request('openai');
     assert.equal(openai.status,200);
-    assert.deepEqual(await openai.json(),{key:'mock-shared-openai'});
+    assert.deepEqual(await openai.json(),{key:'mock-openai-secret'});
     assert.equal(openai.headers.get('cache-control'),'no-store');
-    assert.deepEqual(await (await request('gemini')).json(),{key:'mock-shared-google'});
+    assert.deepEqual(await (await request('gemini')).json(),{key:'mock-gemini-secret'});
     assert.equal((await request('openai',{Origin:'https://other.example'})).status,403);
     assert.equal((await request('infistar')).status,400);
     assert.equal((await fetch(origin+'/_local/ai_keys.env')).status,404);
-    chmodSync(sharedKeyFile,0o644);
-    assert.equal((await request('gemini')).status,403);
-    chmodSync(sharedKeyFile,0o600);
-    rmSync(sharedKeyFile);
-    assert.deepEqual(await (await request('openai')).json(),{key:'mock-openai-secret'});
-    assert.deepEqual(await (await request('gemini')).json(),{key:'mock-gemini-secret'});
     chmodSync(keyFile,0o644);
-    assert.equal((await request('openai')).status,403);
+    assert.equal((await request('gemini')).status,403);
     chmodSync(keyFile,0o600);
     writeFileSync(keyFile,'OPENAI_API_KEY=bad key\n',{mode:0o600});
     assert.equal((await request('openai')).status,422);
     rmSync(keyFile);
+    assert.deepEqual(await (await request('openai')).json(),{key:'mock-shared-openai'});
+    assert.deepEqual(await (await request('gemini')).json(),{key:'mock-shared-google'});
+    rmSync(sharedKeyFile);
     assert.equal((await request('openai')).status,404);
   }finally{await new Promise(resolve=>server.close(resolve));rmSync(folder,{recursive:true,force:true});}
 });

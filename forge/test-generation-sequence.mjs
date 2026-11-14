@@ -19,11 +19,12 @@ test('SVG then bitmap keeps selected references and passes fresh two-stage analy
   let analyses=0;
   const analysis={repIds:['a','b','c','d'],imageRefIds:['b','c','d'],
     refinedPrompt:'SVG guide',refinedPromptImage:'bitmap guide'};
-  const context={$ ,refs,mode:'svg',passMode:'two',
+  const context={$ ,refs,mode:'svg',passMode:'two',crypto:{randomUUID:()=> 'mock-draft-id'},
+    pendingDraftProvenance:null,currentDraftProvenance:null,ensureExportState:()=>({}),
     cfg:()=>({proto:'openai'}),cleanKey:s=>s,baseURL:()=> 'https://example.invalid',
     relayBase:()=>'',kindOf:()=> 'image',usesInfistarGemini:()=>true,imageRequestDimensions:()=>{},
     selectImageRoute:()=>{},tt:s=>s,setStep:()=>{},showErr:msg=>assert.fail(msg),
-    drawPrivateReferences:()=>{},renderReferenceUse:()=>{},
+    drawPrivateReferences:()=>{},renderReferenceUse:()=>{},sampleGenerationReferences:ids=>ids.slice(0,3),
     analyzeReferences:async()=>{analyses++;return analysis;},
     genOaiSVG:async(...args)=>calls.push(['svg',...args]),
     genOaiImage:async(...args)=>calls.push(['image',...args])};
@@ -34,8 +35,8 @@ test('SVG then bitmap keeps selected references and passes fresh two-stage analy
   assert.equal(analyses,2);
   assert.deepEqual([...refs],['a','b','c','d','e','f','g','h','i']);
   assert.deepEqual(calls.map(c=>[c[0],Array.from(c[6]),c[7]]),[
-    ['svg',['a','b','c','d'],'SVG guide'],
-    ['image',['b','c','d'],'bitmap guide']
+    ['svg',['a','b','c'],'SVG guide'],
+    ['image',['a','b','c'],'bitmap guide']
   ]);
   assert.deepEqual(analysis.imageRefIds,['b','c','d']);
   assert.equal($('#genBtn').disabled,false);

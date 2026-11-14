@@ -23,6 +23,8 @@ for(const path of tracked){
 }
 mkdirSync(join(stage,'desktop'),{recursive:true});
 for(const name of ['main.mjs','server.mjs'])copyFileSync(join(desktopRoot,name),join(stage,'desktop',name));
+mkdirSync(join(stage,'scripts'),{recursive:true});
+copyFileSync(join(projectRoot,'scripts','local-keys.mjs'),join(stage,'scripts','local-keys.mjs'));
 const {name,version,type,main}=JSON.parse(readFileSync(join(desktopRoot,'package.json'),'utf8'));
 writeFileSync(join(stage,'package.json'),JSON.stringify({name,version,type,main:join('desktop',main)}));
 rmSync(out,{recursive:true,force:true});

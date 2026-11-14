@@ -404,7 +404,7 @@
             <select id="target">
               <option value="overview" data-i18n="target.overview"></option>
               <option value="architecture" data-i18n="target.architecture"></option>
-              <option value="pipeline" data-i18n="target.pipeline"></option>
+              <option value="pipeline" selected data-i18n="target.pipeline"></option>
               <option value="results" data-i18n="target.results"></option>
               <option value="custom" data-i18n="target.custom"></option>
             </select>
@@ -455,7 +455,7 @@
             <span class="blab" data-i18n="parsemodel"></span>
             <select id="parseModel"></select>
           </div>
-          <div class="bfield"><span class="blab">解析推理强度</span><select id="parseReasoningEffort" aria-label="解析推理强度"><option value="">服务商默认</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">极高</option></select></div>
+          <div class="bfield"><span class="blab">解析推理强度</span><select id="parseReasoningEffort" aria-label="解析推理强度"><option value="">服务商默认</option><option value="medium">中</option><option value="high" selected>高</option><option value="xhigh">极高</option></select></div>
           <p class="bnote">默认不指定强度；其他档位需模型及服务商支持，可能增加耗时与费用。</p>
           <p class="bnote warn-inline" id="parseModelWarn" hidden></p>
           <div class="bfield" id="parseCustomModelRow" hidden>
@@ -564,7 +564,7 @@
         <h4><span class="bi" aria-hidden="true">🖼️</span><span data-i18n="box.refs"></span></h4>
         <div class="refs-tools"><span id="refsSummary" aria-live="polite"></span><button type="button" class="btn-primary" id="refsUploadBtn"></button><button type="button" class="btn-ghost" id="refsClearBtn" hidden></button></div>
       </div>
-      <div class="bfield" style="margin-bottom:9px"><label class="blab" for="privateRefCount" id="privateRefCountLabel">每次参考图数量</label><select id="privateRefCount"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select><button type="button" class="btn-primary btn-sm" id="refsPickPrivateBtn">预览并自选 42 张图</button><button type="button" class="btn-ghost btn-sm" id="refsAutoBtn">恢复自动抽取</button></div>
+      <div class="bfield" style="margin-bottom:9px"><label class="blab" for="privateRefCount" id="privateRefCountLabel">每次参考图数量</label><select id="privateRefCount"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option selected>10</option></select><button type="button" class="btn-primary btn-sm" id="refsPickPrivateBtn">预览并自选 42 张图</button><button type="button" class="btn-ghost btn-sm" id="refsAutoBtn">恢复自动抽取</button></div>
       <p class="bnote" id="privateRefStatus" role="status">正在检查本机私有收藏…</p>
       <input type="file" id="refsUpload" accept="image/png,image/jpeg,image/webp" multiple hidden>
       <p class="hint" id="refsUploadHelp" style="margin:0 0 12px"></p>
@@ -588,19 +588,19 @@
 
     <section class="box b-purple" style="margin-top:13px">
       <h4><span class="bi" aria-hidden="true">🎨</span><span data-i18n="box.model"></span><small id="generationBadge" data-i18n="settings.badge"></small></h4>
-      <div class="srow" style="margin-top:0"><div class="tabs" id="modeTabs"><button data-mode="svg" class="on" data-i18n="mode.svg"></button><button data-mode="image" data-i18n="mode.image"></button></div></div>
-      <div class="bfield" id="imageProviderRow" hidden style="margin-top:9px"><label class="blab" for="imageProvider" id="imageProviderLabel">位图生成服务商</label><select id="imageProvider"><option value="step1">沿用步骤一</option><option value="gemini">Gemini 原生 API</option></select></div>
-      <div class="bfield" id="geminiKeyRow" hidden style="margin-top:9px"><label class="blab" for="geminiKey">Gemini API Key</label><select id="geminiKeySource" aria-label="Gemini API Key source"><option value="default">Default (local file)</option><option value="manual">Manual</option></select><input type="password" id="geminiKey" autocomplete="off" spellcheck="false"></div>
+      <div class="srow" style="margin-top:0"><div class="tabs" id="modeTabs"><button data-mode="svg" data-i18n="mode.svg"></button><button data-mode="image" class="on" data-i18n="mode.image"></button></div></div>
+      <div class="bfield" id="imageProviderRow" style="margin-top:9px"><label class="blab" for="imageProvider" id="imageProviderLabel">位图生成服务商</label><select id="imageProvider"><option value="step1">沿用步骤一</option><option value="gemini" selected>Gemini 原生 API</option></select></div>
+      <div class="bfield" id="geminiKeyRow" style="margin-top:9px"><label class="blab" for="geminiKey">Gemini API Key</label><select id="geminiKeySource" aria-label="Gemini API Key source"><option value="default">Default (local file)</option><option value="manual">Manual</option></select><input type="password" id="geminiKey" autocomplete="off" spellcheck="false"></div>
       <p class="bnote" id="geminiKeySourceStatus" role="status" hidden></p>
       <p class="bnote" id="imageProviderNote" hidden></p>
       <div class="bfield" id="modelRow" style="margin-top:11px"><span class="blab" id="modelLabel" data-i18n="modelLabel"></span><select id="model"></select></div>
-      <div class="bfield" id="imageDimensionsRow" hidden style="margin-top:9px"><span class="blab" data-i18n="img.ratio"></span><select id="figureRatio"><option value="16:9" selected>16:9</option><option value="3:2">3:2</option><option value="4:3">4:3</option><option value="1:1">1:1</option></select><span class="blab" data-i18n="img.resolution"></span><select id="imageResolution"><option value="1K">1K</option><option value="2K" selected>2K</option><option value="4K">4K</option></select></div>
+      <div class="bfield" id="imageDimensionsRow" style="margin-top:9px"><span class="blab" data-i18n="img.ratio"></span><select id="figureRatio"><option value="16:9" selected>16:9</option><option value="3:2">3:2</option><option value="4:3">4:3</option><option value="1:1">1:1</option></select><span class="blab" data-i18n="img.resolution"></span><select id="imageResolution"><option value="1K">1K</option><option value="2K">2K</option><option value="4K" selected>4K</option></select></div>
       <p class="bnote warn-inline" id="imageRatioWarn" hidden></p>
       <p class="bnote warn-inline" id="modelWarn" hidden></p>
       <p class="bnote" id="pdfModelHint" data-i18n="hint.model"></p>
       <div class="bfield" id="analyzeModelRow" hidden style="margin-top:9px"><span class="blab" data-i18n="analyzemodel"></span><select id="analyzeModel"></select></div>
       <p class="bnote warn-inline" id="analyzeSupportNote" hidden></p>
-      <div class="bfield" style="margin-top:9px"><span class="blab">视觉推理强度</span><select id="visualReasoningEffort" aria-label="视觉推理强度"><option value="">服务商默认</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">极高</option></select></div>
+      <div class="bfield" style="margin-top:9px"><span class="blab">视觉推理强度</span><select id="visualReasoningEffort" aria-label="视觉推理强度"><option value="">服务商默认</option><option value="medium">中</option><option value="high" selected>高</option><option value="xhigh">极高</option></select></div>
       <p class="bnote">用于参考图归纳。需模型及服务商支持；默认不指定强度。</p>
       <p class="bnote" id="sentRefsSummary" role="status" aria-live="polite"></p>
       <p class="bnote" id="imageBudgetStatus" role="status" aria-live="polite"></p>
@@ -738,6 +738,7 @@ import {prepareQuery,buildIndex,rank} from './retrieval.mjs';
 import {requestChat, pdfResponseJSON, pdfRepairBody} from './chat-api.mjs?v=20261021-unlimited';
 import {normalizeOpenAIChat} from './openai-parameters.mjs';
 import {ReferenceSampler,sampleGenerationReferences} from './private-reference-sampler.mjs';
+import {sanitizeReferenceAnalysis} from './reference-visual-guide.mjs';
 import {usesInfistarGemini, geminiImageRequest, geminiImageResult, compatibleImageRequest, requestImageWithRecovery, imageFailureKind, fetchBufferedWithTimeout} from './image-api.mjs?v=20261026-nonelinear-resolution';
 import {ImageRoutes, safeImageFailover} from './image-routes.mjs?v=20261020';
 const imageRoutes=new ImageRoutes();
@@ -765,7 +766,7 @@ const $ = s => document.querySelector(s);
 const tt = (...a) => GAL_I18N.t(...a);
 const cleanKey = s => (s||'').replace(/\s+/g,'');
 const esc = s => (s+'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let refs = new Set(), results = [], mode = 'svg';
+let refs = new Set(), results = [], mode = 'image';
 let passMode = 'two'; const MAX_REFS = 10; let analysis = null;
 let pendingDraftProvenance=null, currentDraftProvenance=null;
 let privateSampler=null, manualReferenceOverride=false,privateManualMode=false,privateLoadError='';
@@ -773,9 +774,8 @@ const privateFigures=new Map();
 const providerKeys=new Map();
 const localKeySupported=['127.0.0.1','localhost'].includes(location.hostname);
 let openAIKeyLoad=0,geminiKeyLoad=0;
-for(const [id,storage] of [['keySource','ff_source_openai'],['geminiKeySource','ff_source_gemini']]){
-  const saved=localStorage.getItem(storage);
-  $('#'+id).value=localKeySupported&&saved!=='manual'?'default':'manual';
+for(const id of ['keySource','geminiKeySource']){
+  $('#'+id).value=localKeySupported?'default':'manual';
 }
 for(const key of Object.keys(localStorage)) if(key.startsWith('ff_key_')) localStorage.removeItem(key);
 async function loadPrivateReferences(){
@@ -1384,8 +1384,8 @@ function syncTarget(){
 $('#target').onchange = syncTarget;
 $('#targetDesc').oninput = ()=>localStorage.setItem('ff_target_desc', $('#targetDesc').value);
 (function restoreTarget(){
-  const t = localStorage.getItem('ff_target');
-  if(t){ $('#target').value=t; $('#targetDesc').value=localStorage.getItem('ff_target_desc')||''; }
+  $('#target').value='pipeline';
+  $('#targetDesc').value=localStorage.getItem('ff_target_desc')||'';
   syncTarget();
 })();
 
@@ -1574,8 +1574,8 @@ function withReasoning(body,scope){
   return normalizeOpenAIChat(result);
 }
 for(const [id,key] of [['parseReasoningEffort','ff_parse_reasoning_effort'],['visualReasoningEffort','ff_visual_reasoning_effort']]){
-  const select=$('#'+id), saved=localStorage.getItem(key)||'';
-  select.value=['medium','high','xhigh'].includes(saved)?saved:'';
+  const select=$('#'+id);
+  select.value='high';
   select.onchange=()=>localStorage.setItem(key,select.value);
 }
 $('#reconReasoningEffort').onchange=e=>localStorage.setItem('ff_recon_reasoning_effort_'+$('#provider').value,e.target.value);
@@ -1897,6 +1897,7 @@ async function populateModels(){
   const s = $('#model'); s.innerHTML='';
   if(mode==='image' && $('#imageProvider').value==='gemini'){
     for(const id of ['gemini-3.1-flash-image','gemini-3-pro-image']) s.appendChild(option(id));
+    s.value=s.dataset.geminiModel||'gemini-3-pro-image';
     syncImageRatioSupport();await populateAnalyzeModels();return;
   }
   if(p==='custom'){
@@ -1976,6 +1977,9 @@ async function populateAnalyzeModels(){
 }
 $('#analyzeModel').onchange = e=>{localStorage.setItem('ff_amodel_'+$('#provider').value, e.target.value);syncImageProviderUI();};
 function initProviders(){
+  localStorage.setItem('ff_parse_model_oai','gpt-6.1-sol');
+  localStorage.setItem('ff_amodel_oai','gpt-6.1-sol');
+  localStorage.setItem('ff_recon_model_oai','gpt-6.1-sol');
   // The official endpoint restricts browser CORS. The optional local launcher
   // supplies a same-origin, fixed-upstream relay without storing API keys.
   MAN.providers.nonelinear={label:'非线智能 NoneLinear',base:window.FF_NONELINEAR_BASE||'https://api.nonelinear.com.cn/v1',proto:'oai',cors:!!window.FF_NONELINEAR_BASE,chat:['Qwen3-8B-nothink:free','qwen3-vl-32b-instruct'],vision:['qwen3-vl-32b-instruct'],image:['Qwen-Image']};
@@ -1991,8 +1995,7 @@ function initProviders(){
     else o.textContent=MAN.providers[k].label;
     s.appendChild(o);
   }
-  const saved=localStorage.getItem('ff_provider');
-  s.value=Object.hasOwn(MAN.providers,saved)?saved:'infistar';
+  s.value=Object.hasOwn(MAN.providers,'oai')?'oai':'infistar';
   localStorage.setItem('ff_provider',s.value);
   restoreProviderState(s.value);
   populateParserModels();
@@ -2057,8 +2060,8 @@ async function applyOpenAIKeySource(){
   }catch(error){
     if(epoch!==openAIKeyLoad||$('#provider').value!=='oai'||$('#keySource').value!=='default')return;
     status.textContent=error.message==='403'
-      ?refsText('ai_keys.env 权限需设为 600；也可切换手动输入。','Set ai_keys.env permissions to 600, or choose Manual.')
-      :refsText('本机 OpenAI Key 不可用；请检查 ~/.ai_keys.env 或 _local/ai_keys.env，也可切换手动输入。','Local OpenAI key unavailable. Check ~/.ai_keys.env or _local/ai_keys.env, or choose Manual.');
+      ?refsText('专用 Key 文件权限需设为 600；也可切换手动输入。','Set the dedicated key file permissions to 600, or choose Manual.')
+      :refsText('本机 OpenAI Key 不可用；请检查专用 figureforge_keys.env 或 ~/.ai_keys.env，也可切换手动输入。','Local OpenAI key unavailable. Check the dedicated figureforge_keys.env or ~/.ai_keys.env, or choose Manual.');
   }
   syncImageProviderUI();
 }
@@ -2086,8 +2089,8 @@ async function applyGeminiKeySource(){
   }catch(error){
     if(epoch!==geminiKeyLoad||mode!=='image'||$('#imageProvider').value!=='gemini'||$('#geminiKeySource').value!=='default')return;
     status.textContent=error.message==='403'
-      ?refsText('ai_keys.env 权限需设为 600；也可切换手动输入。','Set ai_keys.env permissions to 600, or choose Manual.')
-      :refsText('本机 Gemini Key 不可用；请检查 ~/.ai_keys.env 中的 GOOGLE_API_KEY，或切换手动输入。','Local Gemini key unavailable. Check GOOGLE_API_KEY in ~/.ai_keys.env, or choose Manual.');
+      ?refsText('专用 Key 文件权限需设为 600；也可切换手动输入。','Set the dedicated key file permissions to 600, or choose Manual.')
+      :refsText('本机 Gemini Key 不可用；请检查专用 figureforge_keys.env 或 ~/.ai_keys.env 中的 GOOGLE_API_KEY。','Local Gemini key unavailable. Check the dedicated figureforge_keys.env or GOOGLE_API_KEY in ~/.ai_keys.env.');
   }
 }
 $('#geminiKeySource').onchange=async e=>{
@@ -2207,7 +2210,7 @@ function syncImageRatioSupport(){
     warn.hidden=false;
   }
 }
-$('#model').onchange = e=>{if($('#imageProvider').value!=='gemini')localStorage.setItem('ff_model_'+$('#provider').value, e.target.value);syncImageRatioSupport();};
+$('#model').onchange = e=>{if($('#imageProvider').value==='gemini')e.target.dataset.geminiModel=e.target.value;else localStorage.setItem('ff_model_'+$('#provider').value, e.target.value);syncImageRatioSupport();};
 $('#figureRatio').onchange=syncImageRatioSupport;
 $('#imageResolution').onchange=syncImageRatioSupport;
 $('#customModel').addEventListener('input',syncImageRatioSupport);
@@ -2217,7 +2220,7 @@ function recordImageRoute(route,state){
 
 /* ---------------- pass 1: analyze references ---------------- */
 const FIGURE_FONT = 'Comic Sans MS';
-const ANALYZE_SYS = 'You are an expert scientific-figure design analyst. You receive one or more top-conference figures of the target visual type. Describe the observed visual grammar: panel divisions, density, element counts, borders, arrows, palette, typography and hierarchy. With multiple figures, infer recurring patterns without treating one as a layout master; with one figure, describe only what is visible. Return STRICT JSON only, with every generated string in English.';
+const ANALYZE_SYS = 'You are an expert scientific-figure design analyst. You receive one or more top-conference figures of the target visual type. Describe only transferable visual grammar: panel geometry, density, element types, borders, arrows, palette, typography and hierarchy. Never use reference-paper titles, panel labels, method names, variables or scientific claims as design instructions. With multiple figures, infer recurring patterns without treating one as a layout master; with one figure, describe only what is visible. Return STRICT JSON only, with every generated string in English.';
 const RECON_SYS = 'You are a meticulous scientific-figure vectorization service. Reconstruct the supplied figure as a complete editable scene, preserving every visible primitive and its geometry. Return STRICT JSON only, never markdown or commentary. Never replace the scene with one full-canvas bitmap; split panels, borders, arrows, text, icons, charts and image regions into separate nodes.';
 function buildAnalyzePrompt(n, idList){
   const ids = (idList||[]).join(', ');
@@ -2231,16 +2234,17 @@ ${n===1?'Describe the visible layout and style without claiming a cross-figure c
  "typography":{"panelHeader":0,"label":0,"note":0},
  "palette":{"background":"#hex","primary":"#hex","accent":"#hex","neutral":"#hex","others":["#hex"]},
  "layout":"how the canvas is divided (number/arrangement of panels) and reading direction",
- "panels":[{"name":"panel name","role":"what this panel shows","x":0,"y":0,"w":0,"h":0}],
- "layoutBlueprint":[{"id":"zone-1","role":"what this concrete zone or slot contains","x":0,"y":0,"w":0,"h":0,"moduleCount":0,"occupancy":0,"moduleKinds":["icon","chart"],"nesting":"local nesting","flow":"local reading direction"}],
+ "panels":[{"name":"generic positional label such as Panel A","role":"visual function, never reference-paper subject matter","x":0,"y":0,"w":0,"h":0}],
+ "layoutBlueprint":[{"id":"zone-1","role":"generic visual element types, never reference-paper subject matter","x":0,"y":0,"w":0,"h":0,"moduleCount":0,"occupancy":0,"moduleKinds":["icon","chart"],"nesting":"local nesting","flow":"local reading direction"}],
  "topology":{"anchor":"the recurring composition grammar shared by the figures","zones":"relative columns/rows and nesting that recur","flow":"reading direction and connector routes","spacing":"gaps, margins and whitespace rhythm"},
  "styleFingerprint":{"background":"surface treatment","panelShape":"corner radius and container treatment","moduleShape":"module box treatment","iconStyle":"icon/illustration language","arrowStyle":"arrow and connector language","textTreatment":"panel header and label treatment"},
  "elements":"recurring visual elements: box styles, arrow types, icon/illustration conventions",
  "hierarchy":"information hierarchy: what is emphasised and how",
  "representative":["ids of up to 4 supplied figures that best represent the observed composition and richest detail; include the only figure when n=1"],
  "imageRefIds":["ids of 1-3 figures that are the strongest visual anchors for a bitmap model"],
- "refinedPrompt":"a detailed self-contained English description of what is drawn: each panel and its contents, the module blocks and their connections, arrow directions and flow, the visual levels, and the icon or illustration style"}
-Rules: output JSON only, no markdown or commentary. Write every generated string in English; translate any text visible in the reference figures rather than copying non-English labels.
+ "refinedPrompt":"a detailed English description of transferable visual layout and styling only, without source-paper names, claims or labels"}
+Rules: output JSON only, no markdown or commentary. Write every generated string in English. Ignore labels in every language.
+Treat all visible words in the reference images as forbidden source content. Never transcribe them into panel names, zone roles, refinedPrompt or any other field. Describe module types such as chart, matrix and icon instead.
 Ignore any overall figure title, title banner, or separate title row in the references. Do not include it in panels, layoutBlueprint, typography, or refinedPrompt; use only the actual diagram panels and their compact headings.
 ${n===1?'Describe the observed grammar of the single figure; do not invent a cross-figure consensus or copy its composition.':'Infer the shared grammar from all figures; do not average them into a bland layout, but do not copy any one composition.'} The output must be a fresh paper-specific composition that mirrors the observed density and element vocabulary.
 panels: 3-5 entries whenever the references support that density. x/y/w/h are integers in a 1600x900 coordinate space with the origin at the top-left; they must not overlap and must stay inside 1600x900. Preserve recurring relative arrangements and reading directions while allowing a new composition.
@@ -2385,8 +2389,8 @@ async function analyzeReferences(){
     if(d.choices?.[0]?.finish_reason==='length') throw new Error(tt('err.analyze3'));
     txt=d.choices?.[0]?.message?.content||'';
   }
-  const j=omitGlobalTitle(extractJSON(txt));
-  if(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(JSON.stringify(j)))
+  const raw=omitGlobalTitle(extractJSON(txt));
+  if(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(JSON.stringify(raw)))
     throw new Error('Reference analysis returned non-English text. Please generate again.');
   // Representative figures may come back as ids (preferred, unambiguous) or as
   // 1-based indices (older models). Accept either, but only ids that really exist
@@ -2398,12 +2402,13 @@ async function analyzeReferences(){
     const n=+s;
     return Number.isInteger(n)&&n>=1&&n<=validIds.length ? validIds[n-1] : null;
   };
-  let reps=(Array.isArray(j.representative)?j.representative:[]).map(resolveRefId).filter(Boolean);
+  let reps=(Array.isArray(raw.representative)?raw.representative:[]).map(resolveRefId).filter(Boolean);
   reps=[...new Set(reps)].slice(0,4);
   if(reps.length<2) reps=[...new Set(validIds)].slice(0,4);
-  let imageRefIds=(Array.isArray(j.imageRefIds)?j.imageRefIds:[]).map(resolveRefId).filter(Boolean);
+  let imageRefIds=(Array.isArray(raw.imageRefIds)?raw.imageRefIds:[]).map(resolveRefId).filter(Boolean);
   imageRefIds=[...new Set(imageRefIds)].slice(0,3);
   if(!imageRefIds.length) imageRefIds=reps.slice(0,3);
+  const j=sanitizeReferenceAnalysis(raw);
   // Kept for backwards-compatible UI metadata only; it is never used as a
   // composition authority or forced into the selected reference set.
   j.primaryId=reps[0] || validIds[0] || null;
@@ -2632,6 +2637,8 @@ function generationIntent(content){
 }
 const FIGURE_TEXT_TARGET=1300;
 const FIGURE_TEXT_RULE='Aim for about 1,300 visible non-whitespace characters or fewer in the finished figure, counting panel headings, labels, legends, numbers and punctuation. Prefer short labels, variables and visual icons to prose, while keeping the method complete.';
+const REFERENCE_CONTENT_RULE='Reference images supply visual style and geometry only. Ignore every reference-image word, title, panel name, method label, variable, chart value and scientific claim. Derive all subject matter, stage names, variables and labels exclusively from the paper content below; if a reference subject differs from this paper, replace it completely.';
+const REFERENCE_CONTENT_RULE_SHORT='References provide style only. All method content and labels must come from this paper.';
 const FIGURE_CARTOON_RULE='Use a restrained cartoon illustration style across the figure with warm flat colours and expressive, simple icons; a small friendly character is optional only where it clarifies a method step. Keep characters secondary and preserve square rectangular modules, even spacing, straight arrows and the reference-derived panel layout.';
 const METHOD_ONLY_FINAL_RULE='Final method-only rule: Ignore any source request to draw Results, benchmarks, measured gains, validation badges or evaluation panels; retain method quantities and stop at the method output.';
 function visibleCharacterCount(text){return Array.from(String(text||'').replace(/\s/gu,'')).length;}
@@ -2650,6 +2657,7 @@ ${content}
 
 ${refLines}
 
+${REFERENCE_CONTENT_RULE}
 Produce one complete editable SVG with viewBox="0 0 1600 900", a horizontal canvas, and a white background. Treat the shared topology, proportions, module density, palette, line styles, spacing, and reading direction in the design contract as the highest-priority visual guide. Do not copy a reference's exact content or entire composition. Use axis-aligned, square-corner rectangular modules, even spacing and straight arrow segments. Align boxes, arrows, and labels. Make panel borders visibly thicker than internal module borders; use dashed frames for optional, conceptual, or repeated groups. Do not use lorem ipsum or placeholder numbers.
 Do not add any figure-wide title banner or standalone title row, even if a reference has one. Begin with the actual diagram panels; use only compact panel headings where needed. ${FIGURE_CARTOON_RULE}
 If the design contract gives panel coordinates or font sizes, use those values directly. Fill each defined module region with meaningful content: flows, network diagrams, tables, small charts, thumbnails, icons, legends, or short labels. Preserve intentional margins and group spacing while avoiding large empty blocks. Reuse repeated styles with <defs> where appropriate, and finish the SVG with </svg>.
@@ -6589,8 +6597,8 @@ async function genOaiImage(base,model,key,content,p,refIds,layoutGuide,attempted
       : '');
   // Keep the selected intent outside style compression, including custom text.
   const intent=budget.unit==='tokens'
-    ? `Figure language requirement: every visible word in the finished figure must be English. Use Comic Sans MS. Do not add any figure-wide title banner or standalone title row. ${FIGURE_CARTOON_RULE} ${FIGURE_TEXT_RULE}\n`+generationIntent(content)+'\n'
-    : `Figure language requirement: every visible word in the finished figure must be English, including panel headings, module labels, axes, legends and annotations. Translate Chinese paper terms into concise English; do not draw Chinese characters.\nTypography requirement: use Comic Sans MS for every visible panel heading, label, axis, legend and annotation. Keep text crisp and readable.\nDo not add any figure-wide title banner or standalone title row, even if a reference or the paper title suggests one. Begin with the actual diagram panels; use only compact panel headings where needed.\n${FIGURE_CARTOON_RULE}\n${FIGURE_TEXT_RULE}\n`+generationIntent(content)+'\n';
+    ? `Figure language requirement: every visible word in the finished figure must be English. Use Comic Sans MS. Do not add any figure-wide title banner or standalone title row. ${FIGURE_CARTOON_RULE} ${FIGURE_TEXT_RULE} ${REFERENCE_CONTENT_RULE_SHORT}\n`+generationIntent(content)+'\n'
+    : `Figure language requirement: every visible word in the finished figure must be English, including panel headings, module labels, axes, legends and annotations. Translate Chinese paper terms into concise English; do not draw Chinese characters.\nTypography requirement: use Comic Sans MS for every visible panel heading, label, axis, legend and annotation. Keep text crisp and readable.\nDo not add any figure-wide title banner or standalone title row, even if a reference or the paper title suggests one. Begin with the actual diagram panels; use only compact panel headings where needed.\n${FIGURE_CARTOON_RULE}\n${FIGURE_TEXT_RULE}\n${REFERENCE_CONTENT_RULE}\n`+generationIntent(content)+'\n';
   const suffix=methodOnly?'\n'+METHOD_ONLY_FINAL_RULE:'';
   const paperReserve=Math.min(imagePromptSize(content,budget),Math.floor(budget.limit*(budget.unit==='tokens'?.2:.35)));
   const paperHeader='\nPaper content (figure-critical facts first):\n';
@@ -6797,6 +6805,10 @@ await loadManifest();
 initProviders();
 syncSubCount();
 await applyOpenAIKeySource();
+syncPassUI();
+syncImageProviderUI();
+$('#modelLabel').textContent=tt('modelLabel.image');
+await applyGeminiKeySource();
 const startupModels=Promise.all([populateModels(), populateParserModels()]);
 await boot();
 await startupModels;

@@ -77,6 +77,7 @@ export function createDesktopServer({staticRoot,privateRoot,keyFile,sharedKeyFil
     if(pathname==='/forge/sw.js'){res.writeHead(404).end();return;}
     let base,relative;
     if(pathname==='/_local/paperbananabench/manifest.json'){base=privateRoot;relative='manifest.json';}
+    else if(pathname==='/_local/paperbananabench/default-selection.json'){base=privateRoot;relative='default-selection.json';}
     else if(/^\/_local\/paperbananabench\/images\/(?:ref|test)_\d+\.(?:jpg|jpeg|png|webp)$/.test(pathname)){base=privateRoot;relative=pathname.slice('/_local/paperbananabench/'.length);}
     else if(/^\/(?:forge|assets|images)\//.test(pathname)){base=staticRoot;relative=pathname.slice(1);if(relative.endsWith('/'))relative+='index.html';}
     else{res.writeHead(404).end();return;}

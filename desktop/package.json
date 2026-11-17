@@ -4,15 +4,18 @@
   "version": "0.1.0",
   "type": "module",
   "main": "main.mjs",
-  "engines": {"node": ">=22.12.0"},
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "npm run cache:install && node ensure-electron.mjs && electron .",
     "cache:install": "node install-private-cache.mjs",
     "package:mac": "node package-app.mjs",
-    "test": "node --test test-server.mjs"
+    "test": "node --test test-server.mjs && node test-multiwindow.mjs"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
-    "electron": "45.3.0"
+    "electron": "45.3.0",
+    "playwright-core": "1.56.1"
   }
 }

@@ -14,6 +14,7 @@ test('desktop server serves only bundled content and private runtime images',asy
   writeFileSync(join(staticRoot,'forge','index.html'),'<title>FigureForge</title>');
   writeFileSync(join(staticRoot,'forge','sw.js'),'should not register');
   writeFileSync(join(privateRoot,'manifest.json'),'{}');
+  writeFileSync(join(privateRoot,'default-selection.json'),'SCREENSHOT_DEFAULTS');
   writeFileSync(join(privateRoot,'images','ref_1.png'),'PNG');
   writeFileSync(join(privateRoot,'special_ids.txt'),'SECRET');
   const keyFile=join(root,'figureforge_keys.env'),sharedKeyFile=join(root,'.ai_keys.env');
@@ -30,6 +31,7 @@ test('desktop server serves only bundled content and private runtime images',asy
     assert.match(await (await fetch(origin+'/forge/')).text(),/FigureForge/);
     assert.equal((await fetch(origin+'/forge/sw.js')).status,404);
     assert.equal((await fetch(origin+'/_local/paperbananabench/manifest.json')).status,200);
+    assert.equal(await (await fetch(origin+'/_local/paperbananabench/default-selection.json')).text(),'SCREENSHOT_DEFAULTS');
     assert.equal(await (await fetch(origin+'/_local/paperbananabench/images/ref_1.png')).text(),'PNG');
     assert.equal((await fetch(origin+'/_local/paperbananabench/special_ids.txt')).status,404);
     assert.equal((await fetch(origin+'/main.mjs')).status,404);
@@ -74,12 +76,17 @@ test('private cache installer copies only manifest and referenced images',()=>{
   const figures=Array.from({length:42},(_,i)=>({id:`ref_${i+1}`,image:`images/ref_${i+1}.png`}));
   for(const figure of figures)writeFileSync(join(sourceRoot,figure.image),'PNG');
   writeFileSync(join(sourceRoot,'manifest.json'),JSON.stringify({figures}));
+  const defaultIds=figures.slice(0,10).map(figure=>figure.id);
+  writeFileSync(join(sourceRoot,'default-selection.json'),JSON.stringify({ids:defaultIds}));
   writeFileSync(join(sourceRoot,'special_ids.txt'),'SECRET');
   try{
     assert.equal(installPrivateCache({sourceRoot,destinationRoot}),42);
     assert.deepEqual(JSON.parse(readFileSync(join(destinationRoot,'manifest.json'),'utf8')).figures,figures);
+    assert.deepEqual(JSON.parse(readFileSync(join(destinationRoot,'default-selection.json'),'utf8')).ids,defaultIds);
     assert.equal(existsSync(join(destinationRoot,'special_ids.txt')),false);
     assert.equal(existsSync(join(destinationRoot,'images','ref_42.png')),true);
+    writeFileSync(join(sourceRoot,'default-selection.json'),JSON.stringify({ids:['ref_1']}));
+    assert.throws(()=>installPrivateCache({sourceRoot,destinationRoot}),/10 distinct IDs/);
     figures[0].image='../special_ids.txt';
     writeFileSync(join(sourceRoot,'manifest.json'),JSON.stringify({figures}));
     assert.throws(()=>installPrivateCache({sourceRoot,destinationRoot}),/Invalid private reference image path/);

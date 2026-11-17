@@ -24,6 +24,14 @@ export function installPrivateCache({sourceRoot=join(projectRoot,'_local','paper
     const image=join(sourceRoot,figure.image);
     if(!existsSync(image)||!lstatSync(image).isFile())throw new Error(`Private reference image is missing: ${figure.image}`);
   }
+  const defaultsPath=join(sourceRoot,'default-selection.json');
+  let defaults=null;
+  if(existsSync(defaultsPath)){
+    defaults=readFileSync(defaultsPath);
+    const ids=JSON.parse(defaults.toString('utf8'))?.ids;
+    if(!Array.isArray(ids)||ids.length!==10||new Set(ids).size!==10||ids.some(id=>!seen.has(id)))
+      throw new Error('Private default selection must contain 10 distinct IDs from the manifest');
+  }
   mkdirSync(destinationRoot,{recursive:true,mode:0o700});
   mkdirSync(join(destinationRoot,'images'),{recursive:true,mode:0o700});
   chmodSync(destinationRoot,0o700);
@@ -35,6 +43,10 @@ export function installPrivateCache({sourceRoot=join(projectRoot,'_local','paper
   }
   writeFileSync(join(destinationRoot,'manifest.json'),source,{mode:0o600});
   chmodSync(join(destinationRoot,'manifest.json'),0o600);
+  if(defaults){
+    writeFileSync(join(destinationRoot,'default-selection.json'),defaults,{mode:0o600});
+    chmodSync(join(destinationRoot,'default-selection.json'),0o600);
+  }
   return manifest.figures.length;
 }
 

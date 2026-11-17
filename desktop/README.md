@@ -6,6 +6,8 @@ This is a personal desktop wrapper around the existing FigureForge page. It does
 
 Open `/Applications/FigureForgeTest.app`. The app starts a loopback-only HTTP server on a random port and opens the existing `forge/` page in an Electron window. The 42 private references live outside the app at `~/Library/Application Support/FigureForgeTest/paperbananabench/`. The app bundle contains only Git-tracked public page assets. The first local update moves the previous FigureForge app data into this directory.
 
+Use **File → New Experiment Window** (`Command+N`) for a blank experiment, or **File → Duplicate Paper Into New Window** (`Command+Shift+N`) to copy the current paper text and figure intent into a new experiment. The duplicate starts with its own reference selection and does not rerun PDF extraction. Each window has separate page settings, generation state, and reconstruction records. All windows share the same read-only private reference cache and local key file. Closing a window discards its in-memory page state; download the drafts and exports you want to keep.
+
 ## Development
 
 Use Node 22.12 or later:
@@ -16,7 +18,7 @@ npm --prefix desktop ci
 npm --prefix desktop run dev
 ```
 
-The development window reads the working tree. Reload with Command-R after source edits. Close the window to stop its local server. If the private cache source in `_local/paperbananabench/` is updated, `npm --prefix desktop run cache:install` refreshes the shared app data.
+Development windows read the working tree. Reload with Command-R after source edits. Close all windows to stop the local server. If the private cache source in `_local/paperbananabench/` is updated, `npm --prefix desktop run cache:install` refreshes the shared app data, including the optional ignored `default-selection.json` file with the ten startup references.
 
 ## Update the installed app
 
@@ -30,3 +32,5 @@ API keys are entered in the page and sent to the selected provider during use. T
 npm --prefix desktop test
 node scripts/check-forge-workflow-lock.mjs
 ```
+
+The desktop test uses a temporary private cache and mock provider responses to run two generations at once. It never reads your real API keys.

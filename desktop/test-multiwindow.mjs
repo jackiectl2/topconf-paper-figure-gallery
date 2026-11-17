@@ -44,6 +44,7 @@ try{
   assert.equal(await first.locator('#geminiKey').inputValue(),'','test windows must not read the user’s home key file');
   assert.equal(await electron.evaluate(({Menu})=>Menu.getApplicationMenu().getMenuItemById('new-experiment').accelerator),'CommandOrControl+N');
   assert.equal(await electron.evaluate(({Menu})=>Menu.getApplicationMenu().getMenuItemById('duplicate-paper').accelerator),'CommandOrControl+Shift+N');
+  assert.equal(await electron.evaluate(({app})=>app.dock.getMenu().getMenuItemById('dock-new-window').label),'New Window');
   assert.match(await first.title(),/Experiment 1/);
   assert.equal(await first.locator('#refsStrip .refmini').count(),10);
   await first.locator('#paper').fill('This paper has an encoder, memory and decoder.');
@@ -57,7 +58,7 @@ try{
   }));
 
   const secondPromise=electron.waitForEvent('window',{timeout:15000});
-  await electron.evaluate(({Menu})=>{Menu.getApplicationMenu().getMenuItemById('new-experiment').click();});
+  await electron.evaluate(({app})=>{app.dock.getMenu().getMenuItemById('dock-new-window').click();});
   const second=await secondPromise;
   await second.locator('#paper').waitFor();
   await second.waitForLoadState('domcontentloaded');

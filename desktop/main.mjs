@@ -118,6 +118,10 @@ function installMenu(){
     ]},
     {role:'editMenu'},{role:'viewMenu'},{role:'windowMenu'}
   ]));
+  app.dock?.setMenu(Menu.buildFromTemplate([
+    {id:'dock-new-window',label:'New Window',click:()=>openExperiment(false)},
+    {id:'dock-duplicate-paper',label:'Duplicate Paper in New Window',click:()=>openExperiment(true)}
+  ]));
 }
 
 async function start(){

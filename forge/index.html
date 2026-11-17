@@ -4537,14 +4537,20 @@ function zipStore(files){
 
 /* Keep provenance beside the exported artifact in one download. A browser cannot
    reveal the destination folder, so the archive travels with the file instead. */
-async function referenceDownloadBundle(filename,data,provenance,kind){
+async function referenceDownloadBundle(filename,data,provenance,kind,sourceBitmap=null){
   const record=provenance || {version:1,draftId:crypto.randomUUID(),source:'external upload or preview',
     selectedReferenceIds:[],analysisReferenceIds:[],generationReferenceIds:[]};
   const manifest={...record,exportedAt:new Date().toISOString(),outputKind:kind,outputFile:filename};
   const bytes=data instanceof Blob?new Uint8Array(await data.arrayBuffer())
     :data instanceof Uint8Array?data:new TextEncoder().encode(String(data));
-  const archive=new Blob([zipStore([{name:filename,data:bytes},
-    {name:'references.json',data:JSON.stringify(manifest,null,2)+'\n'}])],{type:'application/zip'});
+  const files=[{name:filename,data:bytes}];
+  if(sourceBitmap){
+    const bitmapBytes=sourceBitmap.data instanceof Blob?new Uint8Array(await sourceBitmap.data.arrayBuffer()):sourceBitmap.data;
+    files.push({name:sourceBitmap.name,data:bitmapBytes});
+    manifest.sourceBitmapFile=sourceBitmap.name;
+  }
+  files.push({name:'references.json',data:JSON.stringify(manifest,null,2)+'\n'});
+  const archive=new Blob([zipStore(files)],{type:'application/zip'});
   const stem=filename.replace(/\.[^.]+$/,'');
   return {name:stem+'.zip',archive};
 }
@@ -6231,7 +6237,16 @@ function initEditableExport(){
       } else if(target==='vsdx'){
         dlData = zipStore(sceneToVsdxFiles(scene, fontChoice)); dlMime = 'application/vnd.ms-visio.drawing';
       }
-      const bundle=await referenceDownloadBundle(dlName,dlData,st.provenance,'step4-'+target);
+      let sourceBitmap=null;
+      if(st.source==='bitmap' && st.provenance?.source==='FigureForge Step 3' && st.provenance.draftFormat==='image'){
+        if(!st.bitmap) throw new Error('Original Step 3 bitmap is unavailable.');
+        const response=await fetch(st.bitmap);
+        if(!response.ok) throw new Error('Original Step 3 bitmap could not be read.');
+        const bitmap=await response.blob();
+        const ext=bitmap.type.includes('webp')?'webp':/jpe?g/.test(bitmap.type)?'jpg':'png';
+        sourceBitmap={name:`figure-forge-${draftId}-draft.${ext}`,data:bitmap};
+      }
+      const bundle=await referenceDownloadBundle(dlName,dlData,st.provenance,'step4-'+target,sourceBitmap);
       downloadBlob(bundle.name,bundle.archive);
       setExportProgress(status, 100);
       // also offered as a link, so the result is visible even if the automatic

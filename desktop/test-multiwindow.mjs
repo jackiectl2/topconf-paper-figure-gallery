@@ -90,6 +90,29 @@ try{
   await third.locator('#paper').fill('Experiment three has its own revision.');
   assert.match(await first.locator('#paper').inputValue(),/encoder, memory and decoder/);
   assert.match(await second.locator('#paper').inputValue(),/experiment two/);
+  assert.equal(await electron.evaluate(({Menu})=>Menu.getApplicationMenu().getMenuItemById('rename-experiment').label),'Rename Experiment Window…');
+  await electron.evaluate(({Menu})=>{Menu.getApplicationMenu().getMenuItemById('rename-experiment').click();});
+  const renameDialog=third.locator('dialog[data-figureforge-rename]');
+  await renameDialog.waitFor({state:'visible'});
+  await electron.evaluate(({Menu})=>{Menu.getApplicationMenu().getMenuItemById('rename-experiment').click();});
+  assert.equal(await renameDialog.count(),1,'reopening rename does not stack dialogs');
+  await renameDialog.getByRole('button',{name:'Cancel'}).click();
+  await renameDialog.waitFor({state:'detached'});
+  assert.match(await third.title(),/Experiment 3/);
+  await electron.evaluate(({Menu})=>{Menu.getApplicationMenu().getMenuItemById('rename-experiment').click();});
+  await renameDialog.waitFor({state:'visible'});
+  await renameDialog.getByRole('textbox',{name:'Experiment name'}).fill('   ');
+  await renameDialog.getByRole('button',{name:'Save name'}).click();
+  assert.equal(await renameDialog.isVisible(),true,'blank names cannot replace the window title');
+  await renameDialog.getByRole('textbox',{name:'Experiment name'}).fill('FCX · Reference set A');
+  await renameDialog.getByRole('button',{name:'Save name'}).click();
+  await third.waitForFunction(()=>document.title==='FigureForgeTest · FCX · Reference set A');
+  assert.equal(await third.title(),'FigureForgeTest · FCX · Reference set A');
+  assert.match(await first.title(),/Experiment 1/);
+  assert.match(await second.title(),/Experiment 2/);
+  await third.evaluate(()=>{document.title='Page changed the title';});
+  await third.waitForFunction(()=>document.title==='FigureForgeTest · FCX · Reference set A');
+  assert.match(await third.locator('#paper').inputValue(),/own revision/);
   await third.close();
   assert.equal(electron.windows().length,2,'closing one experiment keeps the others open');
 
@@ -178,7 +201,7 @@ try{
   assert.deepEqual(secondRecord.analysisReferenceIds,figures.slice(10,20).map(figure=>figure.id));
   assert.deepEqual(firstRecord.generationReferenceIds,figures.slice(0,3).map(figure=>figure.id));
   assert.deepEqual(secondRecord.generationReferenceIds,figures.slice(10,13).map(figure=>figure.id));
-  console.log('PASS Electron: three isolated windows, copied paper, simultaneous mocked generations, and separate download provenance');
+  console.log('PASS Electron: three isolated windows, rename/cancel/blank handling, copied paper, simultaneous mocked generations, and separate download provenance');
 }finally{
   if(electron){
     for(const page of electron.windows().reverse())await page.close().catch(()=>{});

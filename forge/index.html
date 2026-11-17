@@ -2830,6 +2830,7 @@ $('#genBtn').onclick = async ()=>{
   }
   try{drawPrivateReferences();}catch(error){showErr(error.message);return;}
   if(!refs.size){ showErr(tt('gen.refs')); return; }
+  if(passMode==='two' && refs.size<4){ showErr(tt('gen.twofew',{n:refs.size})); return; }
   if(mode==='image'){
     try{
       imageRequestDimensions(nativeGeminiImage?'gemini':p,model,$('#figureRatio').value,$('#imageResolution').value,nativeGeminiImage||usesInfistarGemini(base,model));
@@ -2847,14 +2848,15 @@ $('#genBtn').onclick = async ()=>{
       setStep(1,'active'); btn.textContent=tt('gen.analyzing',{n:refs.size});
       const a = await analyzeReferences();
       analysisIds=[...refs];
+      refIds=mode==='image' ? a.imageRefIds.slice(0,3) : a.repIds.slice(0,4);
       // SVG receives the measured contract; bitmap generation receives a dense prose guide
-      // while generation uses a random subset from the user's full selection.
+      // while generation uses the visual model's representative references.
       layoutGuide = (mode==='svg') ? a.refinedPrompt : (a.refinedPromptImage || a.refinedPrompt);
       setStep(1,'done'); setStep(2,'active'); btn.textContent=tt('gen.generating');
     }else{
       $('#stepper').hidden=true; btn.textContent=tt('gen.working');
+      refIds=sampleGenerationReferences([...refs]);
     }
-    refIds=sampleGenerationReferences([...refs]);
     renderReferenceUse(analysisIds,refIds);
     pendingDraftProvenance={version:1,draftId:crypto.randomUUID(),createdAt:new Date().toISOString(),
       source:'FigureForge Step 3',draftFormat:mode,model,

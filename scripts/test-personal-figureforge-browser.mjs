@@ -53,9 +53,9 @@ try{
     if(url.pathname.endsWith('/models')) return route.fulfill({json:{data:[{id:'gpt-6.1-sol'},{id:'gpt-image-2.5-sunburst'}]}});
     if(url.pathname.endsWith('/chat/completions')){
       const body=route.request().postDataJSON();chatBodies.push(body);
-      if(svgDraft) return route.fulfill({json:{choices:[{finish_reason:'stop',message:{content:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><rect id="background" data-role="background" data-editable="true" x="0" y="0" width="1600" height="900" fill="#ffffff"/><text id="title" data-role="label" data-editable="true" x="80" y="80" font-size="32">Demo</text></svg>'}}]}});
+      if(svgDraft && body.messages?.[0]?.content?.includes('world-class scientific figure designer')) return route.fulfill({json:{choices:[{finish_reason:'stop',message:{content:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><rect id="background" data-role="background" data-editable="true" x="0" y="0" width="1600" height="900" fill="#ffffff"/><text id="title" data-role="label" data-editable="true" x="80" y="80" font-size="32">Demo</text></svg>'}}]}});
       const ids=await page.evaluate(()=>window.__selectedRefs());
-      const answer={representative:ids.slice(0,4),imageRefIds:ids.slice(0,3),refinedPrompt:'Dense panels and arrows',layout:'three panels',elements:'arrows',hierarchy:'left to right'};
+      const answer={representative:ids.slice(5,9),imageRefIds:ids.slice(4,7),refinedPrompt:'Dense panels and arrows',layout:'three panels',elements:'arrows',hierarchy:'left to right'};
       return route.fulfill({json:{choices:[{finish_reason:'stop',message:{content:JSON.stringify(answer)}}]}});
     }
     if(url.pathname.endsWith('/images/edits')||url.pathname.endsWith('/images/generations')){
@@ -181,6 +181,7 @@ try{
   const disclosure=await page.locator('#sentRefsSummary').textContent();
   for(const id of selected) assert.ok(disclosure.includes(id));
   assert.equal(await page.locator('#sentRefsPreview img').count(),3);
+  assert.deepEqual(await page.locator('#sentRefsPreview b').allTextContents(),selected.slice(4,7),'bitmap uses the visual model selections');
   const stored=await page.evaluate(()=>Object.keys(localStorage).filter(key=>key.includes('key')));
   assert.deepEqual(stored,[]);
   assert.deepEqual(errors,[]);
@@ -226,6 +227,7 @@ try{
   assert.equal(await page.locator('#sentRefsPreview img').count(),3);
   assert.match(await page.locator('#sentRefsSummary').textContent(),/not run/);
   svgDraft=true;
+  await page.locator('#passTabs button[data-pass="two"]').click();
   await page.locator('#modeTabs button[data-mode="svg"]').click();
   await page.locator('#provider').selectOption('oai');
   await page.locator('#genBtn').click();
@@ -242,7 +244,9 @@ try{
   const svgRecord=JSON.parse(zipEntry(svgZip,'references.json').toString());
   assert.equal(svgRecord.outputKind,'step3-svg');
   assert.equal(svgRecord.selectedReferenceIds.length,10);
-  assert.equal(svgRecord.generationReferenceIds.length,3);
+  assert.equal(svgRecord.analysisReferenceIds.length,10);
+  assert.equal(svgRecord.generationReferenceIds.length,4);
+  assert.deepEqual(svgRecord.generationReferenceIds,svgRecord.analysisReferenceIds.slice(5,9),'SVG uses the visual model representatives');
   assert.match(zipEntry(svgZip,svgRecord.outputFile).toString(),/<svg/);
   const beforeSvgContinue=chatBodies.length;
   await page.locator('#continueToStep4').click();
@@ -274,6 +278,15 @@ try{
     if(format==='drawio')assert.match(output.toString(),/<mxfile/);
     else assert.equal(output.readUInt32LE(0),0x04034b50);
   }
+  const callsBeforeTooFew=chatBodies.length;
+  await page.locator('#privateRefCount').selectOption('3');
+  await page.locator('#refsPickPrivateBtn').click();
+  const choices=page.locator('#privatePickerGrid button[data-id]');
+  for(let i=0;i<3;i++)await choices.nth(i).click();
+  await page.locator('#privatePickerConfirm').click();
+  await page.locator('#genBtn').click();
+  assert.match(await page.locator('#genErr').textContent(),/at least 4 references/);
+  assert.equal(chatBodies.length,callsBeforeTooFew,'two-stage selection under four must not call a model');
   const overlongSvg=await page.evaluate(()=>{
     window.__ffRenderSVG(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><text x="20" y="40">${'A'.repeat(1301)}</text></svg>`,false,[],false);
     return document.querySelector('#out .hint').textContent;

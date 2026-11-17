@@ -181,7 +181,7 @@ en:{
  "gen.base":"Fill in the custom base URL and model ID.",
  "gen.nomodel":"Choose a model (if the list is empty, paste the key and click refresh).",
  "gen.needimage":"Bitmap mode requires an image model; pick one from the list.",
- "gen.twofew":"Choose at least one reference ({n} now).",
+ "gen.twofew":"Two-stage mode needs at least 4 references ({n} selected).",
  "gen.analyzing":"① Analyzing {n} references…", "gen.generating":"② Generating figure…",
  "gen.working":"Working…",
  "gen.claudeImage":"Claude is a chat model and cannot generate images; switch to SVG mode or choose an image provider.",

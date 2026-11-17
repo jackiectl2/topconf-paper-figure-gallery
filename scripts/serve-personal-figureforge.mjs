@@ -79,7 +79,7 @@ export function createPersonalServer({fetchImpl=fetch,ocrImpl=countFigureText,ke
     const file=resolve(root,'.'+pathname);
     if (!(file===root || file.startsWith(root+sep)) || !existsSync(file) || !statSync(file).isFile()) { res.writeHead(404).end(); return; }
     const isPrivate=pathname.startsWith('/_local/');
-    if (isPrivate && !pathname.startsWith('/_local/paperbananabench/images/') && pathname !== '/_local/paperbananabench/manifest.json') { res.writeHead(404).end(); return; }
+    if (isPrivate && !pathname.startsWith('/_local/paperbananabench/images/') && pathname !== '/_local/paperbananabench/manifest.json' && pathname !== '/_local/paperbananabench/default-selection.json') { res.writeHead(404).end(); return; }
     if (isPrivate && ![undefined,'same-origin','none'].includes(req.headers['sec-fetch-site'])) { res.writeHead(403).end(); return; }
     res.writeHead(200,{'Content-Type':mime[extname(file).toLowerCase()]||'application/octet-stream'});
     if (req.method==='HEAD') res.end(); else createReadStream(file).pipe(res);

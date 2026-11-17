@@ -570,6 +570,10 @@
       <p class="hint" id="refsUploadHelp" style="margin:0 0 12px"></p>
       <p class="hint" id="refsUploadStatus" role="status" hidden></p>
       <div class="refs-strip" id="refsStrip"><span class="hint" style="margin:0" data-i18n="refs.initial"></span></div>
+      <div id="bitmapRefControls" style="margin-top:12px">
+        <div class="row"><button type="button" class="btn-primary btn-sm" id="bitmapRefsPickBtn">指定生图看的 3 张</button><button type="button" class="btn-ghost btn-sm" id="bitmapRefsAutoBtn" hidden>改由模型挑选</button></div>
+        <p class="bnote" id="bitmapRefsStatus" role="status" aria-live="polite"></p>
+      </div>
     </section>
 
     <section class="box b-indigo" style="margin-top:13px">
@@ -620,6 +624,13 @@
     <select id="privatePickerType"><option value="all">All 42</option><option value="ref">ref</option><option value="test">test</option></select>
     <div id="privatePickerGrid" class="private-picker-grid" role="group" aria-label="Private reference images"></div>
     <div class="private-picker-actions"><span id="privatePickerProgress" role="status" aria-live="polite"></span><div class="row"><button type="button" class="btn-ghost" id="privatePickerCancel">Cancel</button><button type="button" class="btn-primary" id="privatePickerConfirm" disabled>Confirm selection</button></div></div>
+  </dialog>
+
+  <dialog id="bitmapRefPicker" class="private-picker" aria-labelledby="bitmapRefPickerTitle">
+    <div class="private-picker-head"><h3 id="bitmapRefPickerTitle">Choose 3 bitmap generation references</h3><button type="button" id="bitmapRefPickerClose" aria-label="Close">×</button></div>
+    <p class="bnote" id="bitmapRefPickerHelp"></p>
+    <div id="bitmapRefPickerGrid" class="private-picker-grid" role="group" aria-label="Selected analysis references"></div>
+    <div class="private-picker-actions"><span id="bitmapRefPickerProgress" role="status" aria-live="polite"></span><div class="row"><button type="button" class="btn-ghost" id="bitmapRefPickerCancel">Cancel</button><button type="button" class="btn-primary" id="bitmapRefPickerConfirm" disabled>Use these 3 images</button></div></div>
   </dialog>
 
   <div class="card" id="card4">
@@ -769,6 +780,7 @@ let refs = new Set(), results = [], mode = 'image';
 let passMode = 'two'; const MAX_REFS = 10; let analysis = null;
 let pendingDraftProvenance=null, currentDraftProvenance=null;
 let privateSampler=null, manualReferenceOverride=false,privateManualMode=false,privateLoadError='';
+let manualBitmapIds=[],manualBitmapPoolKey='',manualBitmapFrozenAuto=false,pendingBitmapIds=[];
 const privateFigures=new Map();
 const providerKeys=new Map();
 const localKeySupported=['127.0.0.1','localhost'].includes(location.hostname);
@@ -789,6 +801,14 @@ async function loadPrivateReferences(){
       privateFigures.set(f.id,{...f,privateURL:'/_local/paperbananabench/'+f.image});
     }
     privateSampler=new ReferenceSampler([...privateFigures.keys()]);
+    const selected=await fetch('/_local/paperbananabench/default-selection.json',{cache:'no-store'});
+    if(selected.ok){
+      const configured=await selected.json();
+      const ids=configured?.ids;
+      if(!Array.isArray(ids)||ids.length!==10||new Set(ids).size!==10||ids.some(id=>!privateFigures.has(id)))
+        throw new Error('本机默认参考图配置必须包含收藏中的 10 个不同 ID');
+      refs=new Set(ids);manualReferenceOverride=true;privateManualMode=true;
+    }
     $('#privateRefStatus').textContent='本机私有收藏已就绪：42 张；每次生成自动轮换，手选或上传可覆盖。';
   }catch(error){
     privateLoadError=error.message;
@@ -814,6 +834,21 @@ let referenceUploadEpoch = 0;
 const referenceFigure = id => uploadedRefs.get(id) || privateFigures.get(id) || data.figs.find(f=>f.id===id);
 const referenceURL = f => f.localURL || f.privateURL || '../'+f.image;
 const refsText = (zh,en) => GAL_I18N.lang==='en' ? en : zh;
+const bitmapPoolKey = () => [...refs].sort().join('\n');
+function syncManualBitmapUI(){
+  const available=passMode==='two'&&mode==='image';
+  $('#bitmapRefControls').hidden=!available;
+  $('#bitmapRefsAutoBtn').hidden=!manualBitmapIds.length;
+  $('#bitmapRefsStatus').textContent=manualBitmapIds.length
+    ? refsText('已指定生图参考：','Bitmap generation will receive: ')+manualBitmapIds.join(', ')+refsText('。分析阶段仍读取全部所选参考图。','; analysis still reads every selected reference.')
+    : refsText('默认：视觉模型从分析图组中挑最多 3 张用于位图生图。','Default: the vision model chooses up to 3 images from the analysis set for bitmap generation.');
+}
+function syncManualBitmapSelection(){
+  if(manualBitmapIds.length && (manualBitmapPoolKey!==bitmapPoolKey()||manualBitmapIds.some(id=>!refs.has(id)))){
+    manualBitmapIds=[];manualBitmapPoolKey='';manualBitmapFrozenAuto=false;
+  }
+  syncManualBitmapUI();
+}
 function syncPersonalLabels(){
   $('#privateRefCountLabel').textContent=refsText('每次参考图数量（1–10）','References per draft (1–10)');
   $('#refsPickPrivateBtn').textContent=refsText('预览并自选 42 张图','Preview and choose from 42');
@@ -821,6 +856,8 @@ function syncPersonalLabels(){
   $('#privateRefStatus').textContent=privateSampler
     ? privateManualMode
       ? refsText('已固定自选参考图；生成时不会重新抽图。','Manual private references are fixed; generation will not redraw them.')
+      : manualBitmapFrozenAuto
+      ? refsText('已固定当前自动抽出的分析图组，以保留手选的 3 张生图参考。','The current automatic analysis set is fixed to preserve your 3 chosen generation references.')
       : refsText('本机私有收藏已就绪：42 张；每次生成自动轮换，手选或上传可覆盖。','Local private collection ready: 42 images. Generation rotates them; manual picks or uploads override it.')
     : refsText('私有收藏不可用：'+privateLoadError+'。请用本地启动脚本并检查缓存。','Private collection unavailable: '+privateLoadError+'. Start the local server and check the cache.');
   $('#privatePickerTitle').textContent=refsText('预览并自选私有参考图','Preview and choose private references');
@@ -828,6 +865,12 @@ function syncPersonalLabels(){
   $('#privatePickerType').options[0].textContent=refsText('全部 42 张','All 42');
   $('#privatePickerCancel').textContent=refsText('取消','Cancel');
   $('#privatePickerConfirm').textContent=refsText('确认所选','Confirm selection');
+  $('#bitmapRefsPickBtn').textContent=refsText('指定生图看的 3 张','Choose the 3 bitmap references');
+  $('#bitmapRefsAutoBtn').textContent=refsText('改由模型挑选','Let the model choose');
+  $('#bitmapRefPickerTitle').textContent=refsText('指定给位图生图的 3 张参考图','Choose 3 references for bitmap generation');
+  $('#bitmapRefPickerCancel').textContent=refsText('取消','Cancel');
+  $('#bitmapRefPickerConfirm').textContent=refsText('使用这 3 张','Use these 3 images');
+  syncManualBitmapUI();
   $('#keySource').options[0].textContent=refsText('Default（本地文件）','Default (local file)');
   $('#keySource').options[1].textContent=refsText('手动输入','Manual');
   $('#geminiKeySource').options[0].textContent=$('#keySource').options[0].textContent;
@@ -848,6 +891,7 @@ function clearReferences(){
   for(const id of uploadedRefs.keys()) releaseUploadedReference(id);
   manualReferenceOverride=false;
   privateManualMode=false;
+  manualBitmapIds=[];manualBitmapPoolKey='';manualBitmapFrozenAuto=false;
   refs.clear(); patchAllCards(); updateCount(); renderRefsStrip();
   syncPersonalLabels();
 }
@@ -873,7 +917,7 @@ function openPrivatePicker(){
   $('#privatePickerGrid button')?.focus();
 }
 $('#refsPickPrivateBtn').onclick=openPrivatePicker;
-$('#privateRefCount').onchange=()=>{if(privateManualMode)openPrivatePicker();else if($('#privatePicker').open)updatePrivatePickerProgress();};
+$('#privateRefCount').onchange=()=>{if(privateManualMode)openPrivatePicker();else if(manualBitmapFrozenAuto)clearReferences();else if($('#privatePicker').open)updatePrivatePickerProgress();};
 $('#privatePickerType').onchange=()=>{renderPrivatePicker();$('#privatePickerGrid button')?.focus();};
 $('#privatePickerGrid').onclick=e=>{
   const button=e.target.closest('button[data-id]');if(!button)return;
@@ -898,6 +942,52 @@ $('#privatePickerConfirm').onclick=()=>{
   clearReferences();
   refs=new Set(pendingPrivateIds);manualReferenceOverride=true;privateManualMode=true;
   $('#privatePicker').close();patchAllCards();updateCount();renderRefsStrip();syncPersonalLabels();
+};
+function updateBitmapPickerProgress(){
+  $('#bitmapRefPickerHelp').textContent=refsText('仅从上方分析图组中选 3 张；分析仍读取全部所选参考图。方向键移动焦点，空格或回车选择。','Choose 3 from the analysis set above. Analysis still reads all selected images. Use arrow keys to move and Space or Enter to toggle.');
+  $('#bitmapRefPickerProgress').textContent=refsText(`已选 ${pendingBitmapIds.length} / 3${pendingBitmapIds.length?'：'+pendingBitmapIds.join(', '):''}`,`Selected ${pendingBitmapIds.length} / 3${pendingBitmapIds.length?': '+pendingBitmapIds.join(', '):''}`);
+  $('#bitmapRefPickerConfirm').disabled=pendingBitmapIds.length!==3;
+}
+function renderBitmapPicker(){
+  $('#bitmapRefPickerGrid').innerHTML=[...refs].map(id=>{
+    const f=referenceFigure(id),selected=pendingBitmapIds.includes(id);
+    return `<button type="button" class="private-picker-item" data-id="${esc(id)}" aria-pressed="${selected}" aria-label="${esc(id)}"><span class="check" aria-hidden="true">${selected?'✓':'□'}</span><img src="${esc(referenceURL(f))}" alt="" loading="lazy"><span>${esc(id)}</span></button>`;
+  }).join('');
+  updateBitmapPickerProgress();
+}
+$('#bitmapRefsPickBtn').onclick=()=>{
+  try{if(!refs.size)drawPrivateReferences();}catch(error){showErr(error.message);return;}
+  if(refs.size<4){showErr(refsText('两阶段分析至少需要 4 张参考图。','Two-stage analysis needs at least 4 references.'));return;}
+  pendingBitmapIds=manualBitmapIds.filter(id=>refs.has(id));
+  renderBitmapPicker();$('#bitmapRefPicker').showModal();$('#bitmapRefPickerGrid button')?.focus();
+};
+$('#bitmapRefPickerGrid').onclick=e=>{
+  const button=e.target.closest('button[data-id]');if(!button)return;
+  const id=button.dataset.id,index=pendingBitmapIds.indexOf(id);
+  if(index>=0)pendingBitmapIds.splice(index,1);
+  else if(pendingBitmapIds.length<3)pendingBitmapIds.push(id);
+  button.setAttribute('aria-pressed',String(pendingBitmapIds.includes(id)));
+  button.querySelector('.check').textContent=pendingBitmapIds.includes(id)?'✓':'□';
+  updateBitmapPickerProgress();
+};
+$('#bitmapRefPickerGrid').onkeydown=e=>{
+  if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;
+  const buttons=[...$('#bitmapRefPickerGrid').querySelectorAll('button[data-id]')],index=buttons.indexOf(document.activeElement);
+  if(index<0)return;
+  const columns=getComputedStyle($('#bitmapRefPickerGrid')).gridTemplateColumns.split(' ').length;
+  const delta={ArrowLeft:-1,ArrowRight:1,ArrowUp:-columns,ArrowDown:columns}[e.key];
+  buttons[Math.max(0,Math.min(buttons.length-1,index+delta))]?.focus();e.preventDefault();
+};
+$('#bitmapRefPickerClose').onclick=$('#bitmapRefPickerCancel').onclick=()=>$('#bitmapRefPicker').close();
+$('#bitmapRefPickerConfirm').onclick=()=>{
+  if(pendingBitmapIds.length!==3||pendingBitmapIds.some(id=>!refs.has(id)))return;
+  manualBitmapIds=[...pendingBitmapIds];manualBitmapPoolKey=bitmapPoolKey();
+  if(!manualReferenceOverride){manualReferenceOverride=true;manualBitmapFrozenAuto=true;}
+  $('#bitmapRefPicker').close();syncPersonalLabels();
+};
+$('#bitmapRefsAutoBtn').onclick=()=>{
+  if(manualBitmapFrozenAuto){clearReferences();return;}
+  manualBitmapIds=[];manualBitmapPoolKey='';syncManualBitmapUI();
 };
 $('#refsUploadBtn').onclick=()=>$('#refsUpload').click();
 $('#refsClearBtn').onclick=clearReferences;
@@ -1266,6 +1356,7 @@ $('#grid').addEventListener('keydown', e=>{
 });
 $('#clearBtn').onclick = clearReferences;
 function renderRefsStrip(){
+  syncManualBitmapSelection();
   const uploads=[...refs].filter(id=>uploadedRefs.has(id)).length;
   const privateCount=[...refs].filter(id=>privateFigures.has(id)).length;
   $('#refsSummary').textContent=refsText('已选 '+refs.size+' / '+MAX_REFS+' 张 · 私藏 '+privateCount+' · 画廊 '+(refs.size-uploads-privateCount)+' · 上传 '+uploads,'Selected '+refs.size+' / '+MAX_REFS+' · Private '+privateCount+' · Gallery '+(refs.size-uploads-privateCount)+' · Uploaded '+uploads);
@@ -2162,6 +2253,7 @@ $('#geminiKey').oninput=e=>{e.target.value=cleanKey(e.target.value);};
 function syncPassUI(){
   $('#analyzeModelRow').hidden = mode!=='image';
   syncImageProviderUI();
+  syncManualBitmapUI();
 }
 document.querySelectorAll('#passTabs button').forEach(b=>b.onclick=()=>{
   $('#genErr').hidden=true;
@@ -2848,7 +2940,7 @@ $('#genBtn').onclick = async ()=>{
       setStep(1,'active'); btn.textContent=tt('gen.analyzing',{n:refs.size});
       const a = await analyzeReferences();
       analysisIds=[...refs];
-      refIds=mode==='image' ? a.imageRefIds.slice(0,3) : a.repIds.slice(0,4);
+      refIds=mode==='image' ? (manualBitmapIds.length ? [...manualBitmapIds] : a.imageRefIds.slice(0,3)) : a.repIds.slice(0,4);
       // SVG receives the measured contract; bitmap generation receives a dense prose guide
       // while generation uses the visual model's representative references.
       layoutGuide = (mode==='svg') ? a.refinedPrompt : (a.refinedPromptImage || a.refinedPrompt);

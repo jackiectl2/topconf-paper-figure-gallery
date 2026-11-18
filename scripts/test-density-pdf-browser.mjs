@@ -24,7 +24,7 @@ try{
     if(url.pathname.endsWith('/models'))return route.fulfill({json:{data:[{id:'gpt-6.1-sol'}]}});
     if(url.pathname.endsWith('/responses')){
       responses.push(route.request().postDataJSON());
-      return route.fulfill({json:{status:'completed',output_text:JSON.stringify({title:'Dense paper',selectedSections:sections,visualModules,figurePrompt:'Draw all twelve connected components.'})}});
+      return route.fulfill({json:{status:'completed',output_text:JSON.stringify({title:'Dense paper',abstract:'A concise method overview.',selectedSections:sections,visualModules,figurePrompt:'Draw all twelve connected components.'})}});
     }
     return route.fulfill({status:404,json:{error:{message:'mock unavailable'}}});
   });
@@ -39,8 +39,12 @@ try{
   const paper=await page.locator('#paper').inputValue();
   assert.equal((paper.match(/\[Section \d+\]/g)||[]).length,12);
   assert.match(paper,/Component 12/);
-  assert.match(paper,/Drawable module inventory \(12\)/);
-  assert.match(paper,/connects to: Component 12/);
+  assert.equal(paper.startsWith('Figure prompt: Draw all twelve connected components.'),true);
+  assert.ok(paper.indexOf('[Section 1]')>paper.indexOf('Figure prompt:'));
+  assert.ok(paper.indexOf('[Section 12]')>paper.indexOf('[Section 1]'));
+  assert.ok(paper.indexOf('Title: Dense paper')>paper.indexOf('[Section 12]'));
+  assert.ok(paper.indexOf('Abstract highlights: A concise method overview.')>paper.indexOf('Title: Dense paper'));
+  assert.doesNotMatch(paper,/Drawable module inventory|connects to:/);
   assert.match(await page.locator('#pdfBudgetStatus').textContent(),/4,500.*12 relevant sections/);
   assert.equal(calls.length,1);
   assert.equal(calls[0].url,'https://api.openai.com/v1/responses/input_tokens');

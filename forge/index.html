@@ -1793,9 +1793,7 @@ function renderPdfSummary(data){
   const sections=Array.isArray(data.selectedSections)?data.selectedSections.filter(x=>x&&x.summary):[];
   if(!sections.length) throw new Error('解析模型没有返回相关章节摘要');
   const modules=Array.isArray(data.visualModules)?data.visualModules.filter(x=>x&&x.name):[];
-  const names=x=>Array.isArray(x)?x.join(', '):String(x||'');
-  const inventory=modules.map(x=>`- ${x.name}: ${x.role||''}${names(x.inputs)?`; inputs: ${names(x.inputs)}`:''}${names(x.outputs)?`; outputs: ${names(x.outputs)}`:''}${names(x.connectsTo)?`; connects to: ${names(x.connectsTo)}`:''}${x.visual?`; draw as: ${x.visual}`:''}${x.evidence?`; evidence: ${x.evidence}`:''}`).join('\n');
-  const pieces=[inventory&&`Drawable module inventory (${modules.length}):\n${inventory}`,sections.map(x=>`[${x.section||'Relevant section'}] ${x.summary}${x.evidence?`\nEvidence: ${x.evidence}`:''}`).join('\n\n'),data.figurePrompt&&`Figure prompt: ${data.figurePrompt}`,data.title&&`Title: ${data.title}`,data.abstract&&`Abstract highlights: ${data.abstract}`].filter(Boolean);
+  const pieces=[data.figurePrompt&&`Figure prompt: ${data.figurePrompt}`,sections.map(x=>`[${x.section||'Relevant section'}] ${x.summary}${x.evidence?`\nEvidence: ${x.evidence}`:''}`).join('\n\n'),data.title&&`Title: ${data.title}`,data.abstract&&`Abstract highlights: ${data.abstract}`].filter(Boolean);
   $('#paper').value=pieces.join('\n\n');
   $('#pdfBudgetStatus').textContent+=` · ${sections.length} relevant sections · ${modules.length} drawable modules · ${$('#paper').value.length.toLocaleString()} characters retained`;
 }
